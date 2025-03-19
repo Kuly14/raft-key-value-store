@@ -1,8 +1,11 @@
-mod constants;
 mod codec;
+mod constants;
 
 use anyhow::Result;
+use codec::MessageCodec;
+use futures::ready;
 use futures::{FutureExt, Stream, StreamExt};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -15,6 +18,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     signal::ctrl_c,
 };
+use tokio_util::codec::Framed;
 
 pub async fn run(config: Config) -> Result<()> {
     let swarm = Swarm::new(config).await?;
@@ -41,8 +45,8 @@ impl Future for NetworkManager {
         let this = self.get_mut();
 
         loop {
-            match this.swarm.poll_next_unpin(cx)  {
-                Poll::Ready(Some(_e)) =>  {
+            match this.swarm.poll_next_unpin(cx) {
+                Poll::Ready(Some(_e)) => {
                     todo!("handle the event");
                 }
                 Poll::Ready(None) => todo!("Not yet sure when it would be none"),
@@ -60,13 +64,15 @@ pub struct Config {
 }
 impl Config {
     pub fn new(id: u32, number_of_nodes: u32) -> Self {
-        Self { id, number_of_nodes }
+        Self {
+            id,
+            number_of_nodes,
+        }
     }
 }
 
-
 // TODO: Implements stream
-pub struct Swarm {
+struct Swarm {
     config: Config,
     listener: Listener,
     handler: Handler,
@@ -82,8 +88,14 @@ impl Swarm {
         .await?;
 
         // init the connections
-        let handles = Self::init_connections(&config).await?;
-        let handler = Handler { handles };
+        let (sessions_tx, sessions_rx) = mpsc::channel(100);
+        let mut handler = Handler {
+            handles: HashMap::new(),
+            sessions_rx,
+            sessions_tx,
+        };
+        let handles = Self::init_connections(&config, &handler.sessions_tx).await?;
+        handler.handles = handles;
 
         Ok(Self {
             config,
@@ -93,36 +105,47 @@ impl Swarm {
         })
     }
 
-    async fn init_connections(config: &Config) -> Result<Vec<Handle>> {
-        let mut handles = Vec::new();
+    async fn init_connections(
+        config: &Config,
+        sessions_tx: &mpsc::Sender<SessionEvent>,
+    ) -> Result<HashMap<u32, Handle>> {
+        let mut handles = HashMap::new();
         for i in config.id..=config.number_of_nodes {
-            handles.push(Self::init_connection(i).await?);
+            let id = 8000 + i;
+            handles.insert(id, Self::init_connection(id, sessions_tx).await?);
         }
         Ok(handles)
     }
 
-    async fn init_connection(id: u32) -> Result<Handle> {
-        let stream = TcpStream::connect(
-            SocketAddr::from_str(format!("127.0.0.1:{}", 8000 + id).as_str()).unwrap(),
-        )
-        .await?;
-        let (command_tx, command_rx) = mpsc::channel(10);
-        let (event_tx, event_rx) = mpsc::channel(10);
-        // Create the session and spawn it
+    async fn init_connection(id: u32, sessions_tx: &mpsc::Sender<SessionEvent>) -> Result<Handle> {
+        let addr = format!("127.0.0.1:{}", 8000 + id).parse::<SocketAddr>().unwrap();
+        let stream = TcpStream::connect(addr).await?;
+        let (handle, session) = Swarm::get_handle_and_session(stream, addr, sessions_tx);
+        tokio::spawn(session);
+        Ok(handle)
+    }
+
+    fn get_handle_and_session(
+        stream: TcpStream,
+        addr: SocketAddr,
+        sessions_tx: &mpsc::Sender<SessionEvent>,
+    ) -> (Handle, Session) {
+        let peer_id = addr.port() as u32 - 8000;
+        let (command_tx, command_rx) = mpsc::channel(100);
+
         let handle = Handle {
-            peer_id: id,
+            peer_id,
             command_tx,
-            event_rx,
         };
 
-        tokio::spawn(Session {
-            peer_id: id,
-            stream,
-            event_tx,
+        let session = Session {
+            stream: Framed::new(stream, MessageCodec::new()),
+            peer_id,
+            event_tx: sessions_tx.clone(),
             command_rx,
-        });
+        };
 
-        Ok(handle)
+        (handle, session)
     }
 }
 
@@ -132,10 +155,17 @@ impl Stream for Swarm {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         // Poll Listener
+        // TODO: Handle edge cases and errors
+        while let Poll::Ready(Some(ListenerEvent::NewConnection { stream, addr })) =
+            this.listener.poll_next_unpin(cx)
+        {
+            let (handle, session) = Self::get_handle_and_session(stream, addr, &this.handler.sessions_tx);
+            tokio::spawn(session);
+            this.handler.handles.insert(handle.peer_id, handle);
+        }
+
         // Poll Handler
         // Poll State if async
-
-
 
         Poll::Pending
     }
@@ -159,23 +189,27 @@ impl Listener {
     }
 }
 
-
 impl Stream for Listener {
     type Item = ListenerEvent;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-
-        // TODO: Poll Connection
-
-        Poll::Pending
+        match ready!(this.conn.poll_accept(cx)) {
+            Ok((stream, addr)) => Poll::Ready(Some(ListenerEvent::NewConnection { stream, addr })),
+            Err(e) => Poll::Ready(Some(ListenerEvent::ConnectionError(e.into()))),
+        }
     }
 }
-enum ListenerEvent {}
-
+enum ListenerEvent {
+    NewConnection { stream: TcpStream, addr: SocketAddr },
+    ConnectionError(anyhow::Error),
+}
 
 struct Handler {
-    handles: Vec<Handle>,
+    // PeerId -> Handle
+    handles: HashMap<u32, Handle>,
+    sessions_tx: mpsc::Sender<SessionEvent>,
+    sessions_rx: mpsc::Receiver<SessionEvent>,
 }
 
 impl Handler {}
@@ -183,11 +217,10 @@ impl Handler {}
 struct Handle {
     peer_id: u32,
     command_tx: mpsc::Sender<SessionCommand>, // Send to Session
-    event_rx: mpsc::Receiver<SessionEvent>,   // Receive from Session
 }
 
 struct Session {
-    stream: TcpStream,
+    stream: Framed<TcpStream, MessageCodec>,
     peer_id: u32,
     event_tx: mpsc::Sender<SessionEvent>, // Send to hanlder
     command_rx: mpsc::Receiver<SessionCommand>, // receive from Handler
@@ -224,12 +257,14 @@ impl NodeState {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct LogEntry {
     index: usize,     // Position in the log
     term: u64,        // Term when entry was created
     command: Command, // The operation to apply
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct AppendEntries {
     term: u64,              // Leader’s term
     leader_id: u32,         // Leader’s ID
@@ -239,6 +274,7 @@ struct AppendEntries {
     leader_commit: usize,   // Leader’s commit index
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
 enum Command {
     Put { key: String, value: String },
     Get { key: String },
