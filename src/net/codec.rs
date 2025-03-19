@@ -1,22 +1,7 @@
 use bytes::{Buf, BufMut, BytesMut};
-use serde::{Deserialize, Serialize};
 use tokio_util::codec::{Decoder, Encoder};
+use crate::net::primitives::Message;
 
-use crate::AppendEntries;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Message {
-    AppendEntries(AppendEntries)
-}
-
-impl Message {
-    pub fn serialize(&self) -> Vec<u8> {
-        let mut bytes = serde_json::to_vec(self).unwrap();
-        bytes.push(b'\r');
-        bytes.push(b'\n');
-        bytes
-    }
-}
 
 #[derive(Debug)]
 pub(crate) struct MessageCodec;

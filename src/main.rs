@@ -1,4 +1,5 @@
 use raft::Config;
+use anyhow::Result;
 
 const NUM_OF_NODES:u32 = 3;
 
