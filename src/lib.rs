@@ -1,6 +1,8 @@
 mod constants;
+mod codec;
+
 use anyhow::Result;
-use futures::{FutureExt, Stream};
+use futures::{FutureExt, Stream, StreamExt};
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -8,20 +10,63 @@ use std::{
     str::FromStr,
     task::{Context, Poll},
 };
-use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
+use tokio::{
+    net::{TcpListener, TcpStream},
+    signal::ctrl_c,
+};
+
+pub async fn run(config: Config) -> Result<()> {
+    let swarm = Swarm::new(config).await?;
+    let manager = NetworkManager::new(swarm);
+    tokio::spawn(manager);
+
+    let _ = ctrl_c().await;
+    Ok(())
+}
 
 // TODO: Implements Future so it can poll Swarm
 struct NetworkManager {
     swarm: Swarm,
 }
-struct Config {
+impl NetworkManager {
+    fn new(swarm: Swarm) -> Self {
+        NetworkManager { swarm }
+    }
+}
+
+impl Future for NetworkManager {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+
+        loop {
+            match this.swarm.poll_next_unpin(cx)  {
+                Poll::Ready(Some(_e)) =>  {
+                    todo!("handle the event");
+                }
+                Poll::Ready(None) => todo!("Not yet sure when it would be none"),
+                Poll::Pending => break,
+            }
+        }
+
+        Poll::Pending
+    }
+}
+
+pub struct Config {
     id: u32,
     number_of_nodes: u32,
 }
+impl Config {
+    pub fn new(id: u32, number_of_nodes: u32) -> Self {
+        Self { id, number_of_nodes }
+    }
+}
+
 
 // TODO: Implements stream
-struct Swarm {
+pub struct Swarm {
     config: Config,
     listener: Listener,
     handler: Handler,
@@ -44,7 +89,7 @@ impl Swarm {
             config,
             listener,
             handler,
-            state: NodeState::new()
+            state: NodeState::new(),
         })
     }
 
@@ -86,12 +131,18 @@ impl Stream for Swarm {
     type Item = SwarmEvent;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
+        // Poll Listener
+        // Poll Handler
+        // Poll State if async
+
+
 
         Poll::Pending
     }
 }
 
 struct Listener {
+    // TODO: Implement Framed
     conn: TcpListener,
     local_addr: SocketAddr,
 }
@@ -107,6 +158,22 @@ impl Listener {
         Ok(Self::new(listener, addr))
     }
 }
+
+
+impl Stream for Listener {
+    type Item = ListenerEvent;
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+
+
+        // TODO: Poll Connection
+
+        Poll::Pending
+    }
+}
+enum ListenerEvent {}
+
+
 struct Handler {
     handles: Vec<Handle>,
 }
@@ -144,7 +211,7 @@ struct NodeState {
 }
 
 impl NodeState {
-    fn new() -> Self  {
+    fn new() -> Self {
         Self {
             role: Role::Follower,
             current_term: 0,
@@ -152,12 +219,10 @@ impl NodeState {
             log: Vec::new(),
             commit_index: 0,
             last_applied: 0,
-            kv_store: HashMap::new()
+            kv_store: HashMap::new(),
         }
     }
-
 }
-
 
 struct LogEntry {
     index: usize,     // Position in the log
