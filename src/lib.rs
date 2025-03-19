@@ -2,7 +2,7 @@ mod codec;
 mod constants;
 
 use anyhow::Result;
-use codec::MessageCodec;
+use codec::{Message, MessageCodec};
 use futures::ready;
 use futures::{FutureExt, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -118,7 +118,9 @@ impl Swarm {
     }
 
     async fn init_connection(id: u32, sessions_tx: &mpsc::Sender<SessionEvent>) -> Result<Handle> {
-        let addr = format!("127.0.0.1:{}", 8000 + id).parse::<SocketAddr>().unwrap();
+        let addr = format!("127.0.0.1:{}", 8000 + id)
+            .parse::<SocketAddr>()
+            .unwrap();
         let stream = TcpStream::connect(addr).await?;
         let (handle, session) = Swarm::get_handle_and_session(stream, addr, sessions_tx);
         tokio::spawn(session);
@@ -159,12 +161,18 @@ impl Stream for Swarm {
         while let Poll::Ready(Some(ListenerEvent::NewConnection { stream, addr })) =
             this.listener.poll_next_unpin(cx)
         {
-            let (handle, session) = Self::get_handle_and_session(stream, addr, &this.handler.sessions_tx);
+            let (handle, session) =
+                Self::get_handle_and_session(stream, addr, &this.handler.sessions_tx);
             tokio::spawn(session);
             this.handler.handles.insert(handle.peer_id, handle);
         }
 
         // Poll Handler
+        while let Poll::Ready(Some(event)) = this.handler.poll_next_unpin(cx) {
+            match event {
+                HandlerEvent::ReceivedEntries(entries) => this.state.handle_entry(entries),
+            }
+        }
         // Poll State if async
 
         Poll::Pending
@@ -214,6 +222,28 @@ struct Handler {
 
 impl Handler {}
 
+impl Stream for Handler {
+    type Item = HandlerEvent;
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+
+        while let Poll::Ready(Some(event)) = this.sessions_rx.poll_recv(cx) {
+            match event {
+                SessionEvent::ReceivedData(Message::AppendEntries(entries)) => {
+                    return Poll::Ready(Some(HandlerEvent::ReceivedEntries(entries)));
+                }
+                SessionEvent::Vote => (),
+            }
+        }
+
+        Poll::Pending
+    }
+}
+
+enum HandlerEvent {
+    ReceivedEntries(AppendEntries),
+}
+
 struct Handle {
     peer_id: u32,
     command_tx: mpsc::Sender<SessionCommand>, // Send to Session
@@ -255,23 +285,37 @@ impl NodeState {
             kv_store: HashMap::new(),
         }
     }
+
+    fn handle_entry(&mut self, mut entry: AppendEntries) {
+        self.current_term = entry.term;
+        self.log.append(&mut entry.entries);
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct LogEntry {
-    index: usize,     // Position in the log
-    term: u64,        // Term when entry was created
-    command: Command, // The operation to apply
+    /// Position in the log
+    index: usize,
+    /// Term when entry was created
+    term: u64,
+    /// The operation to apply
+    command: Command,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct AppendEntries {
-    term: u64,              // Leader’s term
-    leader_id: u32,         // Leader’s ID
-    prev_log_index: usize,  // Index of log entry before new ones
-    prev_log_term: u64,     // Term of prev_log_index
-    entries: Vec<LogEntry>, // New entries to append (empty for heartbeat)
-    leader_commit: usize,   // Leader’s commit index
+    /// Leader’s term
+    term: u64,
+    /// Leader’s ID
+    leader_id: u32,
+    /// Index of log entry before new ones
+    prev_log_index: usize,
+    /// Term of prev_log_index
+    prev_log_term: u64,
+    /// New entries to append (empty for heartbeat)
+    entries: Vec<LogEntry>,
+    /// Leader’s commit index
+    leader_commit: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -287,4 +331,7 @@ enum Role {
 }
 
 enum SessionCommand {}
-enum SessionEvent {}
+enum SessionEvent {
+    ReceivedData(Message),
+    Vote,
+}
