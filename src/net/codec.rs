@@ -1,7 +1,6 @@
+use crate::net::primitives::Message;
 use bytes::{Buf, BufMut, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
-use crate::net::primitives::Message;
-
 
 #[derive(Debug)]
 pub(crate) struct MessageCodec;
@@ -41,5 +40,3 @@ impl Decoder for MessageCodec {
         Ok(None)
     }
 }
-
-

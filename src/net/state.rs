@@ -1,14 +1,21 @@
+use crate::net::primitives::{AppendEntries, LogEntry, Role};
 use std::collections::HashMap;
-use crate::net::primitives::{Role, LogEntry, AppendEntries};
 
 pub(crate) struct NodeState {
-    role: Role,                        // Leader, Follower, Candidate
-    current_term: u64,                 // Current term
-    voted_for: Option<u32>,            // Node ID voted for in this term
-    log: Vec<LogEntry>,                // Replicated log
-    commit_index: usize,               // Highest committed entry
-    last_applied: usize,               // Last entry applied to KV store
-    kv_store: HashMap<String, String>, // Key-value store
+    /// Leader, Follower, Candidate
+    role: Role,
+    /// Current term
+    current_term: u64,
+    /// Node ID voted for in this term
+    voted_for: Option<u32>,
+    /// Replicated log
+    log: Vec<LogEntry>,
+    /// Highest committed entry
+    commit_index: usize,
+    /// Last entry applied to KV store
+    last_applied: usize,
+    /// Key-value store
+    kv_store: HashMap<String, String>,
 }
 
 impl NodeState {
@@ -25,7 +32,11 @@ impl NodeState {
     }
 
     pub(crate) fn handle_entry(&mut self, mut entry: AppendEntries) {
-        self.current_term = entry.term;
+        self.current_term = if self.current_term < entry.term {
+            entry.term
+        } else {
+            self.current_term
+        };
         self.log.append(&mut entry.entries);
     }
 }

@@ -1,7 +1,6 @@
 use futures::{FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct LogEntry {
     /// Position in the log
@@ -28,7 +27,6 @@ pub(crate) struct AppendEntries {
     pub(crate) leader_commit: usize,
 }
 
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum Command {
     Put { key: String, value: String },
@@ -41,11 +39,10 @@ pub(crate) enum Role {
     Candidate,
 }
 
-
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) enum Message {
-    AppendEntries(AppendEntries)
+    AppendEntries(AppendEntries),
+    AppendResponse { term: u64, success: bool },
 }
 
 impl Message {

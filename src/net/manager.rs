@@ -1,11 +1,10 @@
+use crate::net::swarm::Swarm;
+use futures::StreamExt;
 use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-use futures::StreamExt;
-use crate::net::swarm::Swarm;
 
-// TODO: Implements Future so it can poll Swarm
 pub(crate) struct NetworkManager {
     swarm: Swarm,
 }

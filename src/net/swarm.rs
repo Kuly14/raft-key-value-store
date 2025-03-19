@@ -4,7 +4,11 @@ use crate::net::{
     session::Session,
 };
 use crate::net::{
-    config::Config, handler::Handler, listener::{Listener, ListenerEvent}, session::SessionEvent, state::NodeState,
+    config::Config,
+    handler::Handler,
+    listener::{Listener, ListenerEvent},
+    session::SessionEvent,
+    state::NodeState,
 };
 use anyhow::Result;
 use futures::{Stream, StreamExt};
@@ -19,7 +23,6 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 
-// TODO: Implements stream
 pub struct Swarm {
     config: Config,
     listener: Listener,
@@ -83,7 +86,7 @@ impl Swarm {
         let peer_id = addr.port() as u32 - 8000;
         let (command_tx, command_rx) = mpsc::channel(100);
 
-        let handle = Handle::new(peer_id,command_tx);
+        let handle = Handle::new(peer_id, command_tx);
 
         let session = Session {
             stream: Framed::new(stream, MessageCodec::new()),

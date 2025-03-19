@@ -1,10 +1,8 @@
-mod constants;
 mod net;
-
 pub use net::config::Config;
 
-use net::{swarm::Swarm, manager::NetworkManager};
 use anyhow::Result;
+use net::{manager::NetworkManager, swarm::Swarm};
 use tokio::signal::ctrl_c;
 
 pub async fn run(config: Config) -> Result<()> {
@@ -15,10 +13,3 @@ pub async fn run(config: Config) -> Result<()> {
     let _ = ctrl_c().await;
     Ok(())
 }
-
-
-
-
-
-
-

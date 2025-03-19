@@ -9,7 +9,6 @@ use std::{
 use tokio::net::{TcpListener, TcpStream};
 
 pub(crate) struct Listener {
-    // TODO: Implement Framed
     conn: TcpListener,
     local_addr: SocketAddr,
 }
