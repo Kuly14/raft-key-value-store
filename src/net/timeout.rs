@@ -50,9 +50,8 @@ impl Future for Timeout {
                 this.reset();
                 Poll::Pending
             }
-            Poll::Ready(None)  => Poll::Ready(()), 
-            Poll::Pending => Poll::Pending, 
+            Poll::Ready(None) => Poll::Ready(()),
+            Poll::Pending => Poll::Pending,
         }
-
     }
 }

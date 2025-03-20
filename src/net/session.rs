@@ -1,4 +1,3 @@
-use tracing::info;
 use crate::net::{codec::MessageCodec, primitives::Message};
 use futures::StreamExt;
 use std::{
@@ -9,6 +8,7 @@ use std::{
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
+use tracing::info;
 
 pub(crate) struct Session {
     pub(crate) stream: Framed<TcpStream, MessageCodec>,

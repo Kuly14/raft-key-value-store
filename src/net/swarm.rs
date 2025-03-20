@@ -1,4 +1,3 @@
-use tracing::info;
 use crate::net::{
     codec::MessageCodec,
     handler::{Handle, HandlerEvent},
@@ -23,6 +22,7 @@ use std::{
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
+use tracing::info;
 
 use super::state::StateEvent;
 
@@ -68,7 +68,7 @@ impl Swarm {
     ) -> Result<HashMap<u32, Handle>> {
         info!("Initializing Connections");
         let mut handles = HashMap::new();
-        for i in config.id+1..=config.number_of_nodes-1 {
+        for i in config.id + 1..=config.number_of_nodes - 1 {
             let id = i;
             handles.insert(id, Self::init_connection(id, sessions_tx).await?);
         }
