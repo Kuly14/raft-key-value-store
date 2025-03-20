@@ -14,7 +14,7 @@ pub(crate) struct Timeout {
 impl Timeout {
     pub(crate) fn new() -> Self {
         let (reset_tx, reset_rx) = mpsc::channel(1); // Capacity 1 for latest reset
-        let timeout_ms = rand::thread_rng().gen_range(150..=300);
+        let timeout_ms = rand::rng().random_range(150..=300);
         Timeout {
             sleep: Box::pin(sleep(Duration::from_millis(timeout_ms as u64))),
             reset_rx,

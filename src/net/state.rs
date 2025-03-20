@@ -51,6 +51,12 @@ impl NodeState {
         };
         self.log.append(&mut entry.entries);
     }
+
+    /// When [Timeout] future resolves, we need to create a new one
+    pub(crate) fn reset_timeout(&mut self) {
+        self.timeout = Timeout::new();
+    }
+
     pub(crate) fn poll(&mut self, cx: &mut Context<'_>) -> Poll<StateEvent> {
         // Poll timeout
 

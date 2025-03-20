@@ -142,7 +142,12 @@ impl Stream for Swarm {
         if let Poll::Ready(state_event) = this.state.poll(cx) {
             match state_event {
                 StateEvent::TimerElapsed => {
-                    // Timer elapsed we need to start an election
+                    // Timer elapsed we need to start an election and spawn the future again
+                    this.state.reset_timeout();
+                    // TODO: Not sure if this is necessary, it would be probably enough to wait for
+                    // some other wake from other futures, but this makes sure we start the timer
+                    // right away
+                    let _ = this.state.poll(cx);
                 }
             }
         }
