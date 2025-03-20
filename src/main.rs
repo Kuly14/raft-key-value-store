@@ -1,13 +1,35 @@
 use anyhow::Result;
 use raft::Config;
+use clap::{Parser, Subcommand};
+
 
 const NUM_OF_NODES: u32 = 3;
 
+#[derive(Parser)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Node {
+        #[clap(short, long)]
+        id: u32,
+    },
+}
+
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    // TODO: Parse cli args for the id
-    let id = 1;
-    let config = Config::new(id, NUM_OF_NODES);
-    raft::run(config).await?;
+    let cli = Cli::parse();
+    let config =  match cli.command {
+        Commands::Node { id } => {
+            Config::new(id, NUM_OF_NODES)
+        },
+    };
+
+    println!("{:#?}", config);
+    // raft::run(config).await?;
     Ok(())
 }

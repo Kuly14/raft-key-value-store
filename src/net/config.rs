@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct Config {
     pub id: u32,
     pub number_of_nodes: u32,
