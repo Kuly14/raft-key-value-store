@@ -1,7 +1,5 @@
 use crate::net::{
-    codec::MessageCodec,
-    handler::{Handle, HandlerEvent},
-    session::Session,
+    codec::MessageCodec, handler::{Handle, HandlerEvent}, primitives::Message, session::Session
 };
 use crate::net::{
     config::Config,
@@ -40,7 +38,6 @@ impl Swarm {
             SocketAddr::from_str(format!("127.0.0.1:{}", 8000 + config.id).as_str()).unwrap(),
         )
         .await?;
-        info!("Binded to addr");
 
         let state = NodeState::new();
 
@@ -66,7 +63,6 @@ impl Swarm {
         config: &Config,
         sessions_tx: &mpsc::Sender<SessionEvent>,
     ) -> Result<HashMap<u32, Handle>> {
-        info!("Initializing Connections");
         let mut handles = HashMap::new();
         for i in config.id + 1..=config.number_of_nodes - 1 {
             let id = i;
@@ -103,7 +99,7 @@ impl Swarm {
             peer_id,
             event_tx: sessions_tx.clone(),
             command_rx,
-            queed_message: VecDeque::new(),
+            queued_messages: VecDeque::new(),
         };
 
         (handle, session)
@@ -127,7 +123,6 @@ impl Stream for Swarm {
         let this = self.get_mut();
         // Poll Listener
         // TODO: Handle edge cases and errors
-        info!("Polling listener inside swarm");
         while let Poll::Ready(Some(event)) = this.listener.poll_next_unpin(cx) {
             match event {
                 ListenerEvent::NewConnection { stream, addr } => {
@@ -141,22 +136,25 @@ impl Stream for Swarm {
         }
 
         // Poll Handler
-        info!("Polling handler inside swarm");
         while let Poll::Ready(Some(event)) = this.handler.poll_next_unpin(cx) {
             match event {
                 HandlerEvent::ReceivedEntries(entries) => this.state.handle_entry(entries),
             }
         }
         // Poll State if async
-        info!("Polling state inside swarm");
         if let Poll::Ready(state_event) = this.state.poll(cx) {
             match state_event {
                 StateEvent::TimerElapsed => {
+                    this.state.increment_term();
+                    let message = this.state.create_vote_request(this.config.id);
+
+                    // TODO: Handle this
+                    let _ = this.handler.send_vote_request(message);
+
+                    // No leader we need to start election
                     // Timer elapsed we need to start an election and spawn the future again
                     this.state.reset_timeout();
-                    // TODO: Not sure if this is necessary, it would be probably enough to wait for
-                    // some other wake from other futures, but this makes sure we start the timer
-                    // right away
+                    // Have to poll the future, to register it with the waker 
                     let _ = this.state.poll(cx);
                 }
             }

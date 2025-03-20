@@ -11,6 +11,12 @@ pub(crate) struct LogEntry {
     command: Command,
 }
 
+impl LogEntry {
+    pub(crate) fn term(&self) -> u64 {
+        self.term
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct AppendEntries {
     /// Leader’s term

@@ -4,7 +4,6 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Sleep, sleep};
-use tracing::info;
 
 pub(crate) struct Timeout {
     sleep: Pin<Box<Sleep>>,       // Timer for the timeout duration
@@ -25,7 +24,7 @@ impl Timeout {
         }
     }
 
-    fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         // TODO: Change back to 150..=300
         let timeout_ms = rand::rng().random_range(1..=2);
         // TODO: CHange back to from_millis
@@ -40,7 +39,6 @@ impl Future for Timeout {
         let this = self.get_mut();
         // Poll the sleep timer to check if timeout has elapsed
         if this.sleep.as_mut().poll(cx).is_ready() {
-            info!("SLEEP IS READY");
             return Poll::Ready(());
         }
 

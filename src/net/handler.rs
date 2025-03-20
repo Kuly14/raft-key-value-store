@@ -1,7 +1,9 @@
+use tracing::info;
 use crate::net::{
     primitives::{AppendEntries, Message},
     session::{SessionCommand, SessionEvent},
 };
+use anyhow::Result;
 use futures::Stream;
 use std::{
     collections::HashMap,
@@ -17,7 +19,15 @@ pub(crate) struct Handler {
     pub(crate) sessions_rx: mpsc::Receiver<SessionEvent>,
 }
 
-impl Handler {}
+impl Handler {
+    pub(crate) fn send_vote_request(&mut self, message: Message) -> Result<()> {
+        for handle in self.handles.values() {
+            let command = SessionCommand::Send(message.clone());
+            handle.command_tx.try_send(command)?;
+        }
+        Ok(())
+    }
+}
 
 impl Stream for Handler {
     type Item = HandlerEvent;
@@ -28,6 +38,16 @@ impl Stream for Handler {
             match event {
                 SessionEvent::ReceivedData(Message::AppendEntries(entries)) => {
                     return Poll::Ready(Some(HandlerEvent::ReceivedEntries(entries)));
+                }
+                // TODO: Handle received data
+                // TODO: Maybe change Session Events To Other types so this isn't so weird
+                e @ SessionEvent::ReceivedData(Message::RequestVote {
+                    term,
+                    candidate_id,
+                    last_log_index,
+                    last_log_term,
+                }) => {
+                    info!("RECEIVED DATA: {:#?}", e)
                 }
                 SessionEvent::Vote => (),
                 _ => (),
