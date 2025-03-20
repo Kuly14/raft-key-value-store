@@ -1,5 +1,8 @@
-use crate::net::primitives::{AppendEntries, LogEntry, Role};
-use std::collections::HashMap;
+use futures::FutureExt;
+use tokio::sync::mpsc;
+
+use crate::net::{primitives::{AppendEntries, LogEntry, Role}, timeout::Timeout};
+use std::{collections::HashMap, task::{Context, Poll}};
 
 pub(crate) struct NodeState {
     /// Leader, Follower, Candidate
@@ -16,6 +19,8 @@ pub(crate) struct NodeState {
     last_applied: usize,
     /// Key-value store
     kv_store: HashMap<String, String>,
+    /// Timeout tracker
+    timeout: Timeout
 }
 
 impl NodeState {
@@ -28,6 +33,7 @@ impl NodeState {
             commit_index: 0,
             last_applied: 0,
             kv_store: HashMap::new(),
+            timeout: Timeout::new(),
         }
     }
 
@@ -39,4 +45,18 @@ impl NodeState {
         };
         self.log.append(&mut entry.entries);
     }
+    pub(crate) fn poll(&mut self, cx: &mut Context<'_>) -> Poll<StateEvent> {
+        // Poll timeout
+
+        if let Poll::Ready(()) = self.timeout.poll_unpin(cx) {
+            return Poll::Ready(StateEvent::TimerElapsed);
+            // Timeout expired send an event that we should start election to swarm
+        }
+
+        Poll::Pending
+    }
+}
+
+pub(crate) enum StateEvent {
+    TimerElapsed,
 }

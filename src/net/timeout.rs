@@ -1,47 +1,51 @@
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use tokio::time::{Sleep, sleep, Duration};
+use tokio::sync::mpsc;
 use rand::Rng;
-use std::time::Duration;
-use std::{
-    pin::Pin,
-    task::{Context, Poll},
-};
-use tokio::{sync::mpsc, time::Instant};
 
 pub(crate) struct Timeout {
-    deadline: Instant,
-    reset_rx: mpsc::Receiver<()>,
+    sleep: Pin<Box<Sleep>>,     // Timer for the timeout duration
+    reset_rx: mpsc::Receiver<()>, // Channel to receive reset signals
+    reset_tx: mpsc::Sender<()>,  // Channel to send reset signals (for external use)
 }
 
 impl Timeout {
-    pub(crate) fn new(reset_rx: mpsc::Receiver<()>) -> Self {
+    pub(crate) fn new() -> Self {
+        let (reset_tx, reset_rx) = mpsc::channel(1); // Capacity 1 for latest reset
+        let timeout_ms = rand::thread_rng().gen_range(150..=300);
         Timeout {
-            deadline: Self::get_deadline(),
+            sleep: Box::pin(sleep(Duration::from_millis(timeout_ms as u64))),
             reset_rx,
+            reset_tx,
         }
     }
 
-    fn get_deadline() -> Instant {
+    fn reset(&mut self) {
         let timeout_ms = rand::rng().random_range(150..=300);
-        Instant::now() + Duration::from_millis(timeout_ms as u64)
+        self.sleep = Box::pin(sleep(Duration::from_millis(timeout_ms as u64)));
     }
 }
 
 impl Future for Timeout {
-    type Output = ();
+    type Output = (); 
+
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
-        if Instant::now() > this.deadline {
+        // Poll the sleep timer to check if timeout has elapsed
+        if this.sleep.as_mut().poll(cx).is_ready() {
             return Poll::Ready(());
         }
 
+        // Poll the reset channel for heartbeat signals
         match this.reset_rx.poll_recv(cx) {
             Poll::Ready(Some(())) => {
-                this.deadline = Self::get_deadline();
+                this.reset();
                 Poll::Pending
             }
-            Poll::Ready(None) => Poll::Ready(()),
-            Poll::Pending => {
-                cx.waker().wake_by_ref();
-                Poll::Pending
+            Poll::Ready(None) | Poll::Pending => {
+                Poll::Ready(())
             }
         }
     }

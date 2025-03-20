@@ -23,6 +23,8 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 
+use super::state::StateEvent;
+
 pub struct Swarm {
     config: Config,
     listener: Listener,
@@ -38,6 +40,8 @@ impl Swarm {
         )
         .await?;
 
+        let state = NodeState::new();
+
         // init the connections
         let (sessions_tx, sessions_rx) = mpsc::channel(100);
         let mut handler = Handler {
@@ -52,7 +56,7 @@ impl Swarm {
             config,
             listener,
             handler,
-            state: NodeState::new(),
+            state,
         })
     }
 
@@ -135,6 +139,13 @@ impl Stream for Swarm {
             }
         }
         // Poll State if async
+        if let Poll::Ready(state_event) = this.state.poll(cx) {
+            match state_event {
+                StateEvent::TimerElapsed => {
+                    // Timer elapsed we need to start an election
+                }
+            }
+        }
 
         Poll::Pending
     }
