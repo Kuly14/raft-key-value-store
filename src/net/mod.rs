@@ -1,6 +1,5 @@
 pub(crate) mod codec;
 pub(crate) mod config;
-pub(crate) mod timeout;
 pub(crate) mod handler;
 pub(crate) mod listener;
 pub(crate) mod manager;
@@ -8,3 +7,4 @@ pub(crate) mod primitives;
 pub(crate) mod session;
 pub(crate) mod state;
 pub(crate) mod swarm;
+pub(crate) mod timeout;

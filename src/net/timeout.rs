@@ -1,14 +1,14 @@
+use rand::Rng;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::time::{Sleep, sleep, Duration};
 use tokio::sync::mpsc;
-use rand::Rng;
+use tokio::time::{Duration, Sleep, sleep};
 
 pub(crate) struct Timeout {
-    sleep: Pin<Box<Sleep>>,     // Timer for the timeout duration
+    sleep: Pin<Box<Sleep>>,       // Timer for the timeout duration
     reset_rx: mpsc::Receiver<()>, // Channel to receive reset signals
-    reset_tx: mpsc::Sender<()>,  // Channel to send reset signals (for external use)
+    reset_tx: mpsc::Sender<()>,   // Channel to send reset signals (for external use)
 }
 
 impl Timeout {
@@ -29,7 +29,7 @@ impl Timeout {
 }
 
 impl Future for Timeout {
-    type Output = (); 
+    type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
@@ -44,9 +44,7 @@ impl Future for Timeout {
                 this.reset();
                 Poll::Pending
             }
-            Poll::Ready(None) | Poll::Pending => {
-                Poll::Ready(())
-            }
+            Poll::Ready(None) | Poll::Pending => Poll::Ready(()),
         }
     }
 }

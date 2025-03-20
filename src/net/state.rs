@@ -1,8 +1,14 @@
 use futures::FutureExt;
 use tokio::sync::mpsc;
 
-use crate::net::{primitives::{AppendEntries, LogEntry, Role}, timeout::Timeout};
-use std::{collections::HashMap, task::{Context, Poll}};
+use crate::net::{
+    primitives::{AppendEntries, LogEntry, Role},
+    timeout::Timeout,
+};
+use std::{
+    collections::HashMap,
+    task::{Context, Poll},
+};
 
 pub(crate) struct NodeState {
     /// Leader, Follower, Candidate
@@ -20,7 +26,7 @@ pub(crate) struct NodeState {
     /// Key-value store
     kv_store: HashMap<String, String>,
     /// Timeout tracker
-    timeout: Timeout
+    timeout: Timeout,
 }
 
 impl NodeState {

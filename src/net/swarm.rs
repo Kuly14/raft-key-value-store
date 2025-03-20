@@ -120,15 +120,15 @@ impl Stream for Swarm {
         let this = self.get_mut();
         // Poll Listener
         // TODO: Handle edge cases and errors
-        while let Poll::Ready(Some(event)) =
-            this.listener.poll_next_unpin(cx)
-        {
+        while let Poll::Ready(Some(event)) = this.listener.poll_next_unpin(cx) {
             match event {
                 ListenerEvent::NewConnection { stream, addr } => {
                     this.spawn_session(stream, addr);
-                    return Poll::Ready(Some(SwarmEvent::NewConnection))
+                    return Poll::Ready(Some(SwarmEvent::NewConnection));
                 }
-                ListenerEvent::ConnectionError(_e) => {todo!("handle error");}
+                ListenerEvent::ConnectionError(_e) => {
+                    todo!("handle error");
+                }
             }
         }
 

@@ -61,7 +61,7 @@ pub(crate) enum Message {
         term: u64,
         /// Whether the vote was granted
         vote_granted: bool,
-    }
+    },
 }
 
 impl Message {
