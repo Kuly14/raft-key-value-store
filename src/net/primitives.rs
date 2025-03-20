@@ -42,7 +42,26 @@ pub(crate) enum Role {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) enum Message {
     AppendEntries(AppendEntries),
-    AppendResponse { term: u64, success: bool },
+    AppendResponse {
+        term: u64,
+        success: bool,
+    },
+    RequestVote {
+        /// Candidate’s term
+        term: u64,
+        /// Candidate’s ID
+        candidate_id: u32,
+        /// Index of candidate’s last log entry
+        last_log_index: usize,
+        /// Term of candidate’s last log entry
+        last_log_term: u64,
+    },
+    VoteResponse {
+        /// Receiver’s current term
+        term: u64,
+        /// Whether the vote was granted
+        vote_granted: bool,
+    }
 }
 
 impl Message {

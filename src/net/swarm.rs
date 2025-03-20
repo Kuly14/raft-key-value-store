@@ -13,7 +13,7 @@ use crate::net::{
 use anyhow::Result;
 use futures::{Stream, StreamExt};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     net::SocketAddr,
     pin::Pin,
     str::FromStr,
@@ -93,26 +93,39 @@ impl Swarm {
             peer_id,
             event_tx: sessions_tx.clone(),
             command_rx,
+            queed_message: VecDeque::new(),
         };
 
         (handle, session)
     }
+
+    pub fn spawn_session(&mut self, stream: TcpStream, addr: SocketAddr) {
+        let (handle, session) =
+            Self::get_handle_and_session(stream, addr, &self.handler.sessions_tx);
+        tokio::spawn(session);
+        self.handler.handles.insert(handle.peer_id, handle);
+    }
 }
 
-pub enum SwarmEvent {}
+pub enum SwarmEvent {
+    NewConnection,
+}
 impl Stream for Swarm {
     type Item = SwarmEvent;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         // Poll Listener
         // TODO: Handle edge cases and errors
-        while let Poll::Ready(Some(ListenerEvent::NewConnection { stream, addr })) =
+        while let Poll::Ready(Some(event)) =
             this.listener.poll_next_unpin(cx)
         {
-            let (handle, session) =
-                Self::get_handle_and_session(stream, addr, &this.handler.sessions_tx);
-            tokio::spawn(session);
-            this.handler.handles.insert(handle.peer_id, handle);
+            match event {
+                ListenerEvent::NewConnection { stream, addr } => {
+                    this.spawn_session(stream, addr);
+                    return Poll::Ready(Some(SwarmEvent::NewConnection))
+                }
+                ListenerEvent::ConnectionError(_e) => {todo!("handle error");}
+            }
         }
 
         // Poll Handler

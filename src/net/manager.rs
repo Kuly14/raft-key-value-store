@@ -19,6 +19,7 @@ impl Future for NetworkManager {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
+        // TODO: Handle Swarm Event and add logging
         loop {
             match this.swarm.poll_next_unpin(cx) {
                 Poll::Ready(Some(_e)) => {

@@ -1,5 +1,6 @@
 pub(crate) mod codec;
 pub(crate) mod config;
+pub(crate) mod timeout;
 pub(crate) mod handler;
 pub(crate) mod listener;
 pub(crate) mod manager;
