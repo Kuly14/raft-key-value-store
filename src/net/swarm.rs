@@ -1,5 +1,8 @@
 use crate::net::{
-    codec::MessageCodec, handler::{Handle, HandlerEvent}, primitives::Message, session::Session
+    codec::MessageCodec,
+    handler::{Handle, HandlerEvent},
+    primitives::Message,
+    session::Session,
 };
 use crate::net::{
     config::Config,
@@ -137,6 +140,8 @@ impl Stream for Swarm {
 
         // Poll Handler
         while let Poll::Ready(Some(event)) = this.handler.poll_next_unpin(cx) {
+            this.state.reset_timeout();
+            let _ = this.state.poll(cx);
             match event {
                 HandlerEvent::ReceivedEntries(entries) => this.state.handle_entry(entries),
             }
@@ -147,6 +152,7 @@ impl Stream for Swarm {
                 StateEvent::TimerElapsed => {
                     this.state.increment_term();
                     let message = this.state.create_vote_request(this.config.id);
+                    // TODO: When Receive message reset timer
 
                     // TODO: Handle this
                     let _ = this.handler.send_vote_request(message);
@@ -154,7 +160,7 @@ impl Stream for Swarm {
                     // No leader we need to start election
                     // Timer elapsed we need to start an election and spawn the future again
                     this.state.reset_timeout();
-                    // Have to poll the future, to register it with the waker 
+                    // Have to poll the future, to register it with the waker
                     let _ = this.state.poll(cx);
                 }
             }

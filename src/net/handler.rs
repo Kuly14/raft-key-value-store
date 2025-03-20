@@ -1,4 +1,3 @@
-use tracing::info;
 use crate::net::{
     primitives::{AppendEntries, Message},
     session::{SessionCommand, SessionEvent},
@@ -11,6 +10,7 @@ use std::{
     task::{Context, Poll},
 };
 use tokio::sync::mpsc;
+use tracing::info;
 
 pub(crate) struct Handler {
     // PeerId -> Handle
