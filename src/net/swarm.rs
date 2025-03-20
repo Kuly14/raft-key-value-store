@@ -1,3 +1,4 @@
+use tracing::info;
 use crate::net::{
     codec::MessageCodec,
     handler::{Handle, HandlerEvent},
@@ -39,6 +40,7 @@ impl Swarm {
             SocketAddr::from_str(format!("127.0.0.1:{}", 8000 + config.id).as_str()).unwrap(),
         )
         .await?;
+        info!("Binded to addr");
 
         let state = NodeState::new();
 
@@ -64,9 +66,10 @@ impl Swarm {
         config: &Config,
         sessions_tx: &mpsc::Sender<SessionEvent>,
     ) -> Result<HashMap<u32, Handle>> {
+        info!("Initializing Connections");
         let mut handles = HashMap::new();
-        for i in config.id..=config.number_of_nodes {
-            let id = 8000 + i;
+        for i in config.id+1..=config.number_of_nodes-1 {
+            let id = i;
             handles.insert(id, Self::init_connection(id, sessions_tx).await?);
         }
         Ok(handles)
@@ -76,8 +79,11 @@ impl Swarm {
         let addr = format!("127.0.0.1:{}", 8000 + id)
             .parse::<SocketAddr>()
             .unwrap();
+
+        info!(address=?addr, "Initializing connection");
         let stream = TcpStream::connect(addr).await?;
         let (handle, session) = Swarm::get_handle_and_session(stream, addr, sessions_tx);
+        info!(id=?id, "Spawning session");
         tokio::spawn(session);
         Ok(handle)
     }
@@ -111,6 +117,7 @@ impl Swarm {
     }
 }
 
+#[derive(Debug)]
 pub enum SwarmEvent {
     NewConnection,
 }
@@ -120,6 +127,7 @@ impl Stream for Swarm {
         let this = self.get_mut();
         // Poll Listener
         // TODO: Handle edge cases and errors
+        info!("Polling listener inside swarm");
         while let Poll::Ready(Some(event)) = this.listener.poll_next_unpin(cx) {
             match event {
                 ListenerEvent::NewConnection { stream, addr } => {
@@ -133,12 +141,14 @@ impl Stream for Swarm {
         }
 
         // Poll Handler
+        info!("Polling handler inside swarm");
         while let Poll::Ready(Some(event)) = this.handler.poll_next_unpin(cx) {
             match event {
                 HandlerEvent::ReceivedEntries(entries) => this.state.handle_entry(entries),
             }
         }
         // Poll State if async
+        info!("Polling state inside swarm");
         if let Poll::Ready(state_event) = this.state.poll(cx) {
             match state_event {
                 StateEvent::TimerElapsed => {

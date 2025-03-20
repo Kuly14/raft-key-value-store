@@ -22,9 +22,7 @@ impl Future for NetworkManager {
         // TODO: Handle Swarm Event and add logging
         loop {
             match this.swarm.poll_next_unpin(cx) {
-                Poll::Ready(Some(_e)) => {
-                    todo!("handle the event");
-                }
+                Poll::Ready(Some(_e)) => {}
                 Poll::Ready(None) => todo!("Not yet sure when it would be none"),
                 Poll::Pending => break,
             }

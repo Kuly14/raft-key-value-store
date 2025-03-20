@@ -4,6 +4,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Sleep, sleep};
+use tracing::info;
 
 pub(crate) struct Timeout {
     sleep: Pin<Box<Sleep>>,       // Timer for the timeout duration
@@ -14,17 +15,21 @@ pub(crate) struct Timeout {
 impl Timeout {
     pub(crate) fn new() -> Self {
         let (reset_tx, reset_rx) = mpsc::channel(1); // Capacity 1 for latest reset
-        let timeout_ms = rand::rng().random_range(150..=300);
+        // TODO: CHange back to 150..=300
+        let timeout_ms = rand::rng().random_range(1..=2);
         Timeout {
-            sleep: Box::pin(sleep(Duration::from_millis(timeout_ms as u64))),
+            // TODO: Change back to from_millis()
+            sleep: Box::pin(sleep(Duration::from_secs(timeout_ms as u64))),
             reset_rx,
             reset_tx,
         }
     }
 
     fn reset(&mut self) {
-        let timeout_ms = rand::rng().random_range(150..=300);
-        self.sleep = Box::pin(sleep(Duration::from_millis(timeout_ms as u64)));
+        // TODO: Change back to 150..=300
+        let timeout_ms = rand::rng().random_range(1..=2);
+        // TODO: CHange back to from_millis
+        self.sleep = Box::pin(sleep(Duration::from_secs(timeout_ms as u64)));
     }
 }
 
@@ -35,6 +40,7 @@ impl Future for Timeout {
         let this = self.get_mut();
         // Poll the sleep timer to check if timeout has elapsed
         if this.sleep.as_mut().poll(cx).is_ready() {
+            info!("SLEEP IS READY");
             return Poll::Ready(());
         }
 
@@ -44,7 +50,9 @@ impl Future for Timeout {
                 this.reset();
                 Poll::Pending
             }
-            Poll::Ready(None) | Poll::Pending => Poll::Ready(()),
+            Poll::Ready(None)  => Poll::Ready(()), 
+            Poll::Pending => Poll::Pending, 
         }
+
     }
 }

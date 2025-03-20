@@ -1,5 +1,5 @@
 use futures::FutureExt;
-use tokio::sync::mpsc;
+use tracing::info;
 
 use crate::net::{
     primitives::{AppendEntries, LogEntry, Role},
@@ -59,7 +59,7 @@ impl NodeState {
 
     pub(crate) fn poll(&mut self, cx: &mut Context<'_>) -> Poll<StateEvent> {
         // Poll timeout
-
+        info!("Polled State");
         if let Poll::Ready(()) = self.timeout.poll_unpin(cx) {
             return Poll::Ready(StateEvent::TimerElapsed);
             // Timeout expired send an event that we should start election to swarm

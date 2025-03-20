@@ -30,6 +30,6 @@ async fn main() -> Result<()> {
     };
 
     println!("{:#?}", config);
-    // raft::run(config).await?;
+    raft::run(config).await?;
     Ok(())
 }
