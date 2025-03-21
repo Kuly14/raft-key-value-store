@@ -12,6 +12,9 @@ pub(crate) struct LogEntry {
 }
 
 impl LogEntry {
+    pub(crate) fn new(index:usize, term:u64, command: Command) -> Self {
+        Self { index, term, command} 
+    }
     pub(crate) fn term(&self) -> u64 {
         self.term
     }
@@ -49,8 +52,8 @@ pub(crate) enum Role {
 pub(crate) enum Message {
     AppendEntries(AppendEntries),
     AppendResponse(AppendResponse),
-    RequestVote(RequestVote) ,
-    VoteResponse(VoteResponse)
+    VoteRequeset(VoteRequest),
+    VoteResponse(VoteResponse),
 }
 
 impl Message {
@@ -63,7 +66,7 @@ impl Message {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub(crate) struct RequestVote {
+pub(crate) struct VoteRequest {
     /// Candidate’s term
     pub(crate) term: u64,
     /// Candidate’s ID
@@ -77,11 +80,17 @@ pub(crate) struct RequestVote {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct VoteResponse {
     /// Receiver’s current term
-    term: u64,
+    pub(crate) term: u64,
     /// Whether the vote was granted
-    vote_granted: bool,
+    pub(crate) vote_granted: bool,
 }
 
+
+impl VoteResponse {
+    pub(crate) fn new(term: u64, vote_granted: bool) -> Self {
+        Self { term, vote_granted }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct AppendResponse {

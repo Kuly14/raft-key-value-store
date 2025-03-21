@@ -9,7 +9,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use super::primitives::{Message, RequestVote};
+use super::primitives::{Message, VoteRequest, VoteResponse};
 
 pub(crate) struct NodeState {
     /// Current leader
@@ -49,6 +49,7 @@ impl NodeState {
 
     pub(crate) fn increment_term(&mut self) {
         self.current_term += 1;
+        self.voted_for = None;
     }
 
     pub(crate) fn last_log_term(&self) -> u64 {
@@ -58,8 +59,12 @@ impl NodeState {
         }
     }
 
+    pub(crate) fn last_log_index(&self) -> usize {
+        self.log.len()
+    }
+
     pub(crate) fn create_vote_request(&self, id: u32) -> Message {
-        Message::RequestVote(RequestVote {
+        Message::VoteRequeset(VoteRequest {
             term: self.current_term,
             candidate_id: id,
             last_log_index: self.log.len(),
@@ -71,6 +76,7 @@ impl NodeState {
         &self.current_leader
     }
 
+    // TODO: Handle the rest of the entry
     pub(crate) fn handle_entry(&mut self, mut entry: AppendEntries) {
         self.current_term = if self.current_term < entry.term {
             entry.term
@@ -79,6 +85,62 @@ impl NodeState {
         };
         self.log.append(&mut entry.entries);
     }
+
+    // TODO: Unit tests to see if the logic is correct
+    pub(crate) fn handle_vote_request(&mut self, vote_request: VoteRequest) -> Message {
+        let VoteRequest {
+            term,
+            candidate_id,
+            last_log_term,
+            last_log_index,
+        } = vote_request;
+
+        // Reject if candidate’s term is outdated
+        if term < self.current_term {
+            return Message::VoteResponse(VoteResponse::new(self.current_term, false));
+        }
+
+        // Update term and reset vote if candidate’s term is newer
+        if term > self.current_term {
+            self.current_term = term;
+            self.voted_for = None;
+        }
+
+        // Check if we can vote and if log is up-to-date
+        let vote_granted = (self.voted_for.is_none() || self.voted_for == Some(candidate_id))
+            && ((last_log_term > self.last_log_term())
+                || (last_log_term == self.last_log_term()
+                    && last_log_index >= self.last_log_index()));
+
+        if vote_granted {
+            self.voted_for = Some(candidate_id);
+        }
+
+        Message::VoteResponse(VoteResponse::new(self.current_term, vote_granted))
+    }
+
+    // pub(crate) fn handle_vote_request(&mut self, vote_request: VoteRequest) -> Message {
+    //     let VoteRequest {
+    //         term,
+    //         candidate_id,
+    //         last_log_term,
+    //         last_log_index,
+    //     } = vote_request;
+    //     // Uses Raft Consensus Rules to either accept or reject the request
+    //     let vote_granted = self.voted_for.is_none()
+    //         || self.voted_for == Some(candidate_id)
+    //             && term >= self.current_term
+    //             && ((last_log_term > self.last_log_term())
+    //                 || (last_log_term == self.last_log_term())
+    //                     && last_log_index >= self.last_log_index())
+    //             && matches!(self.role, Role::Follower);
+    //
+    //     if vote_granted {
+    //         self.voted_for = Some(candidate_id);
+    //     }
+    //
+    //     Message::VoteResponse(VoteResponse::new(self.current_term, vote_granted))
+    // }
 
     pub(crate) fn set_new_leader(&mut self, id: Option<u32>) {
         self.current_leader = id;

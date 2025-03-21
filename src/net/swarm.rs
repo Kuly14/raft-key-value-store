@@ -24,7 +24,7 @@ use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 use tracing::info;
 
-use super::state::StateEvent;
+use super::{session::SessionCommand, state::StateEvent};
 
 pub struct Swarm {
     config: Config,
@@ -66,8 +66,7 @@ impl Swarm {
         sessions_tx: &mpsc::Sender<SessionEvent>,
     ) -> Result<HashMap<u32, Handle>> {
         let mut handles = HashMap::new();
-        for i in config.id + 1..=config.number_of_nodes - 1 {
-            let id = i;
+        for id in config.id + 1..=config.number_of_nodes - 1 {
             handles.insert(id, Self::init_connection(id, sessions_tx).await?);
         }
         Ok(handles)
@@ -80,7 +79,7 @@ impl Swarm {
 
         info!(address=?addr, "Initializing connection");
         let stream = TcpStream::connect(addr).await?;
-        let (handle, session) = Swarm::get_handle_and_session(stream, addr, sessions_tx);
+        let (handle, session) = Swarm::get_handle_and_session(stream, id, sessions_tx);
         info!(id=?id, "Spawning session");
         tokio::spawn(session);
         Ok(handle)
@@ -88,10 +87,9 @@ impl Swarm {
 
     fn get_handle_and_session(
         stream: TcpStream,
-        addr: SocketAddr,
+        peer_id: u32,
         sessions_tx: &mpsc::Sender<SessionEvent>,
     ) -> (Handle, Session) {
-        let peer_id = addr.port() as u32 - 8000;
         let (command_tx, command_rx) = mpsc::channel(100);
 
         let handle = Handle::new(peer_id, command_tx);
@@ -108,8 +106,10 @@ impl Swarm {
     }
 
     pub fn spawn_session(&mut self, stream: TcpStream, addr: SocketAddr) {
+        let id = stream.peer_addr().unwrap().port() as u32 - 8000;
         let (handle, session) =
-            Self::get_handle_and_session(stream, addr, &self.handler.sessions_tx);
+        //TODO: HANDLE THIS UNWRAP
+            Self::get_handle_and_session(stream, id , &self.handler.sessions_tx);
         tokio::spawn(session);
         self.handler.handles.insert(handle.peer_id, handle);
     }
@@ -145,7 +145,16 @@ impl Stream for Swarm {
                 HandlerEvent::ReceivedEntries(entries) => this.state.handle_entry(entries),
                 HandlerEvent::AppendResponse(append_response) => (),
 
-                HandlerEvent::RequestVote(vote_request) => (),
+                HandlerEvent::VoteRequest(vote_request) => {
+                    let candidate_id = vote_request.candidate_id;
+                    let response = this.state.handle_vote_request(vote_request);
+                    if let Some(handle) = this.handler.handles.get(&candidate_id) {
+                        // TODO: Handle error
+                        let _ = handle.command_tx.try_send(SessionCommand::Send(response));
+                    } else {
+                        unreachable!("Should be unreachable: {:#?}", this.handler.handles.keys())
+                    }
+                },
                 HandlerEvent::VoteResponse(vote_response) => (),
             }
         }

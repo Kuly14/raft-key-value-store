@@ -8,6 +8,7 @@ use std::{
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
+use tracing::info;
 
 pub(crate) struct Session {
     pub(crate) stream: Framed<TcpStream, MessageCodec>,
@@ -35,6 +36,7 @@ impl Future for Session {
         // Poll the stream
         // TODO: Handle errors
         while let Poll::Ready(Some(Ok(msg))) = this.stream.poll_next_unpin(cx) {
+            info!("Received Message From Peer: {:#?}", msg);
             // TODO: Handle errors
             let _ = this.event_tx.try_send(SessionEvent::ReceivedData(msg));
         }
@@ -47,6 +49,7 @@ impl Future for Session {
             }
             match this.queued_messages.pop_front() {
                 Some(msg) => {
+                    info!("Sending This Message Over The Wire: {:#?}", msg);
                     if let Err(e) = this.stream.start_send_unpin(msg) {
                         // error!(err=%e);
                         // pin.disconnect();

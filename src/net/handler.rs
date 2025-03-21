@@ -12,7 +12,7 @@ use std::{
 use tokio::sync::mpsc;
 use tracing::info;
 
-use super::primitives::{AppendResponse, RequestVote, VoteResponse};
+use super::primitives::{AppendResponse, VoteRequest, VoteResponse};
 
 pub(crate) struct Handler {
     // PeerId -> Handle
@@ -44,9 +44,8 @@ impl Stream for Handler {
                 }
                 // TODO: Handle received data
                 // TODO: Maybe change Session Events To Other types so this isn't so weird
-                SessionEvent::ReceivedData(Message::RequestVote(vote_request)) => {
-                    info!("RECEIVED DATA: {:#?}", vote_request);
-                    return Poll::Ready(Some(HandlerEvent::RequestVote(vote_request)));
+                SessionEvent::ReceivedData(Message::VoteRequeset(vote_request)) => {
+                    return Poll::Ready(Some(HandlerEvent::VoteRequest(vote_request)));
                 }
 
                 SessionEvent::ReceivedData(Message::VoteResponse(vote_response)) => {
@@ -67,7 +66,7 @@ pub(crate) enum HandlerEvent {
     ReceivedEntries(AppendEntries),
     AppendResponse(AppendResponse),
     VoteResponse(VoteResponse),
-    RequestVote(RequestVote),
+    VoteRequest(VoteRequest),
 }
 
 pub(crate) struct Handle {
