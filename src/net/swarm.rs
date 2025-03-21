@@ -1,7 +1,6 @@
 use crate::net::{
     codec::MessageCodec,
     handler::{Handle, HandlerEvent},
-    primitives::Message,
     session::Session,
 };
 use crate::net::{
@@ -144,6 +143,10 @@ impl Stream for Swarm {
             let _ = this.state.poll(cx);
             match event {
                 HandlerEvent::ReceivedEntries(entries) => this.state.handle_entry(entries),
+                HandlerEvent::AppendResponse(append_response) => (),
+
+                HandlerEvent::RequestVote(vote_request) => (),
+                HandlerEvent::VoteResponse(vote_response) => (),
             }
         }
         // Poll State if async

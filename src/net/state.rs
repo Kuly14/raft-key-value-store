@@ -9,7 +9,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use super::primitives::Message;
+use super::primitives::{Message, RequestVote};
 
 pub(crate) struct NodeState {
     /// Current leader
@@ -59,12 +59,12 @@ impl NodeState {
     }
 
     pub(crate) fn create_vote_request(&self, id: u32) -> Message {
-        Message::RequestVote {
+        Message::RequestVote(RequestVote {
             term: self.current_term,
             candidate_id: id,
             last_log_index: self.log.len(),
             last_log_term: self.last_log_term(),
-        }
+        })
     }
 
     pub(crate) fn leader(&self) -> &Option<u32> {

@@ -48,26 +48,9 @@ pub(crate) enum Role {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) enum Message {
     AppendEntries(AppendEntries),
-    AppendResponse {
-        term: u64,
-        success: bool,
-    },
-    RequestVote {
-        /// Candidate’s term
-        term: u64,
-        /// Candidate’s ID
-        candidate_id: u32,
-        /// Index of candidate’s last log entry
-        last_log_index: usize,
-        /// Term of candidate’s last log entry
-        last_log_term: u64,
-    },
-    VoteResponse {
-        /// Receiver’s current term
-        term: u64,
-        /// Whether the vote was granted
-        vote_granted: bool,
-    },
+    AppendResponse(AppendResponse),
+    RequestVote(RequestVote) ,
+    VoteResponse(VoteResponse)
 }
 
 impl Message {
@@ -77,4 +60,31 @@ impl Message {
         bytes.push(b'\n');
         bytes
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct RequestVote {
+    /// Candidate’s term
+    pub(crate) term: u64,
+    /// Candidate’s ID
+    pub(crate) candidate_id: u32,
+    /// Index of candidate’s last log entry
+    pub(crate) last_log_index: usize,
+    /// Term of candidate’s last log entry
+    pub(crate) last_log_term: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct VoteResponse {
+    /// Receiver’s current term
+    term: u64,
+    /// Whether the vote was granted
+    vote_granted: bool,
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct AppendResponse {
+    term: u64,
+    success: bool,
 }

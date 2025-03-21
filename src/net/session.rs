@@ -74,5 +74,4 @@ pub(crate) enum SessionCommand {
 // TODO: Change this so I don't have to propagate message
 pub(crate) enum SessionEvent {
     ReceivedData(Message),
-    Vote,
 }

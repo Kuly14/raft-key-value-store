@@ -12,6 +12,8 @@ use std::{
 use tokio::sync::mpsc;
 use tracing::info;
 
+use super::primitives::{AppendResponse, RequestVote, VoteResponse};
+
 pub(crate) struct Handler {
     // PeerId -> Handle
     pub(crate) handles: HashMap<u32, Handle>,
@@ -34,23 +36,26 @@ impl Stream for Handler {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        while let Poll::Ready(Some(event)) = this.sessions_rx.poll_recv(cx) {
+        // TODO: Handle errors here
+        if let Poll::Ready(Some(event)) = this.sessions_rx.poll_recv(cx) {
             match event {
                 SessionEvent::ReceivedData(Message::AppendEntries(entries)) => {
                     return Poll::Ready(Some(HandlerEvent::ReceivedEntries(entries)));
                 }
                 // TODO: Handle received data
                 // TODO: Maybe change Session Events To Other types so this isn't so weird
-                e @ SessionEvent::ReceivedData(Message::RequestVote {
-                    term,
-                    candidate_id,
-                    last_log_index,
-                    last_log_term,
-                }) => {
-                    info!("RECEIVED DATA: {:#?}", e)
+                SessionEvent::ReceivedData(Message::RequestVote(vote_request)) => {
+                    info!("RECEIVED DATA: {:#?}", vote_request);
+                    return Poll::Ready(Some(HandlerEvent::RequestVote(vote_request)));
                 }
-                SessionEvent::Vote => (),
-                _ => (),
+
+                SessionEvent::ReceivedData(Message::VoteResponse(vote_response)) => {
+                    return Poll::Ready(Some(HandlerEvent::VoteResponse(vote_response)));
+                }
+
+                SessionEvent::ReceivedData(Message::AppendResponse(append_response)) => {
+                    return Poll::Ready(Some(HandlerEvent::AppendResponse(append_response)))
+                }
             }
         }
 
@@ -60,6 +65,9 @@ impl Stream for Handler {
 
 pub(crate) enum HandlerEvent {
     ReceivedEntries(AppendEntries),
+    AppendResponse(AppendResponse),
+    VoteResponse(VoteResponse),
+    RequestVote(RequestVote),
 }
 
 pub(crate) struct Handle {
