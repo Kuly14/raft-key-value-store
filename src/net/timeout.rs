@@ -5,6 +5,7 @@ use std::task::{Context, Poll};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Sleep, sleep};
 
+#[derive(Debug)]
 pub(crate) struct Timeout {
     sleep: Pin<Box<Sleep>>,       // Timer for the timeout duration
     reset_rx: mpsc::Receiver<()>, // Channel to receive reset signals

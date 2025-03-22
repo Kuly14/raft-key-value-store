@@ -4,6 +4,7 @@ use std::{
     collections::VecDeque,
     pin::Pin,
     task::{Context, Poll},
+    net::SocketAddr,
 };
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
@@ -49,7 +50,6 @@ impl Future for Session {
             }
             match this.queued_messages.pop_front() {
                 Some(msg) => {
-                    info!("Sending This Message Over The Wire: {:#?}", msg);
                     if let Err(e) = this.stream.start_send_unpin(msg) {
                         // error!(err=%e);
                         // pin.disconnect();
@@ -77,4 +77,34 @@ pub(crate) enum SessionCommand {
 // TODO: Change this so I don't have to propagate message
 pub(crate) enum SessionEvent {
     ReceivedData(Message),
+}
+
+pub(crate) async fn pending_session(
+    stream: TcpStream,
+    local_addr: SocketAddr,
+    sender: mpsc::Sender<PendingSessionEvent>,
+) -> Option<()> {
+    let mut stream = Framed::new(stream, MessageCodec::new());
+    info!("IN PENDING SESSION");
+
+    stream
+        .send(Message::Hello { local_addr })
+        .await
+        .ok()?;
+
+    if let x @ Message::Hello { local_addr } = stream.next().await?.ok()? {
+        info!("RECEIVED IN PENDING SESSION: {:?}", x);
+        sender
+            .send(PendingSessionEvent::Established { stream, addr: local_addr })
+            .await
+            .ok()?;
+    }
+    None
+}
+
+pub enum PendingSessionEvent {
+    Established {
+        stream: Framed<TcpStream, MessageCodec>,
+        addr: SocketAddr,
+    },
 }

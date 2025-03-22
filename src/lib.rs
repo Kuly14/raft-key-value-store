@@ -11,7 +11,6 @@ pub async fn run(config: Config) -> Result<()> {
     let swarm = Swarm::new(config).await?;
     let manager = NetworkManager::new(swarm);
     tokio::spawn(manager);
-
     let _ = ctrl_c().await;
     Ok(())
 }

@@ -26,10 +26,11 @@ use tracing::info;
 
 use super::{
     primitives::{AppendEntries, VoteRequest},
-    session::SessionCommand,
+    session::{pending_session, SessionCommand},
     state::StateEvent,
 };
 
+#[derive(Debug)]
 pub struct Swarm {
     config: Config,
     listener: Listener,
@@ -49,48 +50,49 @@ impl Swarm {
 
         // init the connections
         let (sessions_tx, sessions_rx) = mpsc::channel(100);
-        let mut handler = Handler {
+        let (pending_tx, pending_rx) = mpsc::channel(10);
+        let handler = Handler {
             handles: HashMap::new(),
             sessions_rx,
             sessions_tx,
+            pending_tx,
+            pending_rx
         };
-        let handles = Self::init_connections(&config, &handler.sessions_tx).await?;
-        handler.handles = handles;
-
-        Ok(Self {
+        let swarm = Self {
             config,
             listener,
             handler,
             state,
-        })
+        };
+
+        swarm.init_connections().await?;
+        info!("HANDLER: {:?}", swarm.handler);
+
+        Ok(swarm)
     }
 
     async fn init_connections(
-        config: &Config,
-        sessions_tx: &mpsc::Sender<SessionEvent>,
-    ) -> Result<HashMap<u32, Handle>> {
-        let mut handles = HashMap::new();
-        for id in config.id + 1..=config.number_of_nodes - 1 {
-            handles.insert(id, Self::init_connection(id, sessions_tx).await?);
+        &self,
+    ) -> Result<()> {
+        for id in self.config.id + 1..=self.config.number_of_nodes - 1 {
+            self.init_connection(id).await?;
         }
-        Ok(handles)
+        Ok(())
     }
 
-    async fn init_connection(id: u32, sessions_tx: &mpsc::Sender<SessionEvent>) -> Result<Handle> {
+    async fn init_connection(&self, id: u32) -> anyhow::Result<()>  {
         let addr = format!("127.0.0.1:{}", 8000 + id)
             .parse::<SocketAddr>()
             .unwrap();
 
         info!(address=?addr, "Initializing connection");
         let stream = TcpStream::connect(addr).await?;
-        let (handle, session) = Swarm::get_handle_and_session(stream, id, sessions_tx);
-        info!(id=?id, "Spawning session");
-        tokio::spawn(session);
-        Ok(handle)
+        tokio::spawn(pending_session(stream, self.config.local_addr, self.handler.pending_tx.clone()));
+        Ok(())
     }
 
     fn get_handle_and_session(
-        stream: TcpStream,
+        stream: Framed<TcpStream, MessageCodec>,
         peer_id: u32,
         sessions_tx: &mpsc::Sender<SessionEvent>,
     ) -> (Handle, Session) {
@@ -99,7 +101,7 @@ impl Swarm {
         let handle = Handle::new(peer_id, command_tx);
 
         let session = Session {
-            stream: Framed::new(stream, MessageCodec::new()),
+            stream,
             peer_id,
             event_tx: sessions_tx.clone(),
             command_rx,
@@ -109,11 +111,12 @@ impl Swarm {
         (handle, session)
     }
 
-    pub fn spawn_session(&mut self, stream: TcpStream, addr: SocketAddr) {
+    pub fn spawn_session(&mut self, stream: Framed<TcpStream, MessageCodec>, addr: SocketAddr) {
         //TODO: HANDLE THIS UNWRAP
-        let id = stream.peer_addr().unwrap().port() as u32 - 8000;
+        let id = addr.port() as u32 - 8000;
         let (handle, session) = Self::get_handle_and_session(stream, id, &self.handler.sessions_tx);
         tokio::spawn(session);
+        println!("HANDLE: {:?}", handle);
         self.handler.handles.insert(handle.peer_id, handle);
     }
 
@@ -143,12 +146,14 @@ impl Swarm {
         self.state.reset_timeout();
         // Have to poll the future, to register it with the waker
     }
+
 }
 
 #[derive(Debug)]
 pub enum SwarmEvent {
-    NewConnection,
+    NewConnection { addr: SocketAddr },
 }
+
 impl Stream for Swarm {
     type Item = SwarmEvent;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -158,8 +163,8 @@ impl Stream for Swarm {
         while let Poll::Ready(Some(event)) = this.listener.poll_next_unpin(cx) {
             match event {
                 ListenerEvent::NewConnection { stream, addr } => {
-                    this.spawn_session(stream, addr);
-                    return Poll::Ready(Some(SwarmEvent::NewConnection));
+                    tokio::spawn(pending_session(stream, this.config.local_addr, this.handler.pending_tx.clone()));
+                    return Poll::Ready(Some(SwarmEvent::NewConnection { addr }));
                 }
                 ListenerEvent::ConnectionError(_e) => {
                     todo!("handle error");
@@ -176,6 +181,7 @@ impl Stream for Swarm {
                 HandlerEvent::AppendResponse(append_response) => (),
                 HandlerEvent::VoteRequest(vote_request) => this.handle_vote_request(vote_request),
                 HandlerEvent::VoteResponse(vote_response) => (),
+                HandlerEvent::NewSession { stream, addr } => this.spawn_session(stream, addr),
             }
         }
         // Poll State if async

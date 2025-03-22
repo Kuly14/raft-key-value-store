@@ -5,20 +5,24 @@ use crate::net::{
 use anyhow::Result;
 use futures::Stream;
 use std::{
-    collections::HashMap,
-    pin::Pin,
-    task::{Context, Poll},
+    collections::HashMap, net::SocketAddr, pin::Pin, task::{Context, Poll}
 };
-use tokio::sync::mpsc;
+use tokio::{net::TcpSocket, sync::mpsc, net::TcpStream};
 use tracing::info;
+use tokio_util::codec::Framed;
 
-use super::primitives::{AppendResponse, VoteRequest, VoteResponse};
+use super::{
+    codec::MessageCodec, primitives::{AppendResponse, VoteRequest, VoteResponse}, session::PendingSessionEvent
+};
 
+#[derive(Debug)]
 pub(crate) struct Handler {
     // PeerId -> Handle
     pub(crate) handles: HashMap<u32, Handle>,
     pub(crate) sessions_tx: mpsc::Sender<SessionEvent>,
     pub(crate) sessions_rx: mpsc::Receiver<SessionEvent>,
+    pub(crate) pending_tx: mpsc::Sender<PendingSessionEvent>,
+    pub(crate) pending_rx: mpsc::Receiver<PendingSessionEvent>,
 }
 
 impl Handler {
@@ -59,6 +63,12 @@ impl Stream for Handler {
             }
         }
 
+        if let Poll::Ready(Some(PendingSessionEvent::Established { stream, addr })) =
+            this.pending_rx.poll_recv(cx)
+        {
+            return Poll::Ready(Some(HandlerEvent::NewSession { stream, addr }));
+        }
+
         Poll::Pending
     }
 }
@@ -68,8 +78,10 @@ pub(crate) enum HandlerEvent {
     AppendResponse(AppendResponse),
     VoteResponse(VoteResponse),
     VoteRequest(VoteRequest),
+    NewSession { stream: Framed<TcpStream, MessageCodec>, addr: SocketAddr },
 }
 
+#[derive(Debug)]
 pub(crate) struct Handle {
     pub(crate) peer_id: u32,
     pub(crate) command_tx: mpsc::Sender<SessionCommand>, // Send to Session

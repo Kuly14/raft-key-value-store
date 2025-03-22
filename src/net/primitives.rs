@@ -48,6 +48,7 @@ pub(crate) enum Command {
     Get { key: String },
 }
 
+#[derive(Debug)]
 pub(crate) enum Role {
     Leader,
     Follower,

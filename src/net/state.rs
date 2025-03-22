@@ -11,6 +11,7 @@ use std::{
 
 use super::primitives::{Message, VoteRequest, VoteResponse};
 
+#[derive(Debug)]
 pub(crate) struct NodeState {
     /// Current leader
     current_leader: Option<u32>,
