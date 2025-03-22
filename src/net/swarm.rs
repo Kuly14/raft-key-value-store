@@ -154,7 +154,7 @@ impl Stream for Swarm {
                     } else {
                         unreachable!("Should be unreachable: {:#?}", this.handler.handles.keys())
                     }
-                },
+                }
                 HandlerEvent::VoteResponse(vote_response) => (),
             }
         }

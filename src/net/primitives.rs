@@ -12,8 +12,12 @@ pub(crate) struct LogEntry {
 }
 
 impl LogEntry {
-    pub(crate) fn new(index:usize, term:u64, command: Command) -> Self {
-        Self { index, term, command} 
+    pub(crate) fn new(index: usize, term: u64, command: Command) -> Self {
+        Self {
+            index,
+            term,
+            command,
+        }
     }
     pub(crate) fn term(&self) -> u64 {
         self.term
@@ -84,7 +88,6 @@ pub(crate) struct VoteResponse {
     /// Whether the vote was granted
     pub(crate) vote_granted: bool,
 }
-
 
 impl VoteResponse {
     pub(crate) fn new(term: u64, vote_granted: bool) -> Self {
