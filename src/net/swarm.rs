@@ -24,7 +24,11 @@ use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 use tracing::info;
 
-use super::{primitives::{AppendEntries, VoteRequest}, session::SessionCommand, state::StateEvent};
+use super::{
+    primitives::{AppendEntries, VoteRequest},
+    session::SessionCommand,
+    state::StateEvent,
+};
 
 pub struct Swarm {
     config: Config,
@@ -108,13 +112,12 @@ impl Swarm {
     pub fn spawn_session(&mut self, stream: TcpStream, addr: SocketAddr) {
         //TODO: HANDLE THIS UNWRAP
         let id = stream.peer_addr().unwrap().port() as u32 - 8000;
-        let (handle, session) =
-            Self::get_handle_and_session(stream, id , &self.handler.sessions_tx);
+        let (handle, session) = Self::get_handle_and_session(stream, id, &self.handler.sessions_tx);
         tokio::spawn(session);
         self.handler.handles.insert(handle.peer_id, handle);
     }
 
-    pub(crate) fn handle_vote_request(&mut self, vote_request: VoteRequest)  {
+    pub(crate) fn handle_vote_request(&mut self, vote_request: VoteRequest) {
         let candidate_id = vote_request.candidate_id;
         let response = self.state.handle_vote_request(vote_request);
         if let Some(handle) = self.handler.handles.get(&candidate_id) {
@@ -171,7 +174,7 @@ impl Stream for Swarm {
             match event {
                 HandlerEvent::ReceivedEntries(entries) => this.handle_entry(entries),
                 HandlerEvent::AppendResponse(append_response) => (),
-                HandlerEvent::VoteRequest(vote_request) => this.handle_vote_request(vote_request), 
+                HandlerEvent::VoteRequest(vote_request) => this.handle_vote_request(vote_request),
                 HandlerEvent::VoteResponse(vote_response) => (),
             }
         }
