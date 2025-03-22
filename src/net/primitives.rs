@@ -61,9 +61,7 @@ pub(crate) enum Message {
     AppendResponse(AppendResponse),
     VoteRequeset(VoteRequest),
     VoteResponse(VoteResponse),
-    Hello {
-        local_addr: SocketAddr,
-    }
+    Hello { local_addr: SocketAddr },
 }
 
 impl Message {

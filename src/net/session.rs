@@ -2,9 +2,9 @@ use crate::net::{codec::MessageCodec, primitives::Message};
 use futures::{SinkExt, StreamExt};
 use std::{
     collections::VecDeque,
+    net::SocketAddr,
     pin::Pin,
     task::{Context, Poll},
-    net::SocketAddr,
 };
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
@@ -87,15 +87,15 @@ pub(crate) async fn pending_session(
     let mut stream = Framed::new(stream, MessageCodec::new());
     info!("IN PENDING SESSION");
 
-    stream
-        .send(Message::Hello { local_addr })
-        .await
-        .ok()?;
+    stream.send(Message::Hello { local_addr }).await.ok()?;
 
     if let x @ Message::Hello { local_addr } = stream.next().await?.ok()? {
         info!("RECEIVED IN PENDING SESSION: {:?}", x);
         sender
-            .send(PendingSessionEvent::Established { stream, addr: local_addr })
+            .send(PendingSessionEvent::Established {
+                stream,
+                addr: local_addr,
+            })
             .await
             .ok()?;
     }

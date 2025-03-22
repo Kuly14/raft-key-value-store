@@ -26,7 +26,7 @@ use tracing::info;
 
 use super::{
     primitives::{AppendEntries, VoteRequest},
-    session::{pending_session, SessionCommand},
+    session::{SessionCommand, pending_session},
     state::StateEvent,
 };
 
@@ -56,7 +56,7 @@ impl Swarm {
             sessions_rx,
             sessions_tx,
             pending_tx,
-            pending_rx
+            pending_rx,
         };
         let swarm = Self {
             config,
@@ -71,23 +71,25 @@ impl Swarm {
         Ok(swarm)
     }
 
-    async fn init_connections(
-        &self,
-    ) -> Result<()> {
+    async fn init_connections(&self) -> Result<()> {
         for id in self.config.id + 1..=self.config.number_of_nodes - 1 {
             self.init_connection(id).await?;
         }
         Ok(())
     }
 
-    async fn init_connection(&self, id: u32) -> anyhow::Result<()>  {
+    async fn init_connection(&self, id: u32) -> anyhow::Result<()> {
         let addr = format!("127.0.0.1:{}", 8000 + id)
             .parse::<SocketAddr>()
             .unwrap();
 
         info!(address=?addr, "Initializing connection");
         let stream = TcpStream::connect(addr).await?;
-        tokio::spawn(pending_session(stream, self.config.local_addr, self.handler.pending_tx.clone()));
+        tokio::spawn(pending_session(
+            stream,
+            self.config.local_addr,
+            self.handler.pending_tx.clone(),
+        ));
         Ok(())
     }
 
@@ -146,7 +148,6 @@ impl Swarm {
         self.state.reset_timeout();
         // Have to poll the future, to register it with the waker
     }
-
 }
 
 #[derive(Debug)]
@@ -163,7 +164,11 @@ impl Stream for Swarm {
         while let Poll::Ready(Some(event)) = this.listener.poll_next_unpin(cx) {
             match event {
                 ListenerEvent::NewConnection { stream, addr } => {
-                    tokio::spawn(pending_session(stream, this.config.local_addr, this.handler.pending_tx.clone()));
+                    tokio::spawn(pending_session(
+                        stream,
+                        this.config.local_addr,
+                        this.handler.pending_tx.clone(),
+                    ));
                     return Poll::Ready(Some(SwarmEvent::NewConnection { addr }));
                 }
                 ListenerEvent::ConnectionError(_e) => {
@@ -184,6 +189,7 @@ impl Stream for Swarm {
                 HandlerEvent::NewSession { stream, addr } => this.spawn_session(stream, addr),
             }
         }
+
         // Poll State if async
         if let Poll::Ready(state_event) = this.state.poll(cx) {
             match state_event {

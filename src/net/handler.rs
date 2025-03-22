@@ -5,14 +5,19 @@ use crate::net::{
 use anyhow::Result;
 use futures::Stream;
 use std::{
-    collections::HashMap, net::SocketAddr, pin::Pin, task::{Context, Poll}
+    collections::HashMap,
+    net::SocketAddr,
+    pin::Pin,
+    task::{Context, Poll},
 };
-use tokio::{net::TcpSocket, sync::mpsc, net::TcpStream};
-use tracing::info;
+use tokio::{net::TcpSocket, net::TcpStream, sync::mpsc};
 use tokio_util::codec::Framed;
+use tracing::info;
 
 use super::{
-    codec::MessageCodec, primitives::{AppendResponse, VoteRequest, VoteResponse}, session::PendingSessionEvent
+    codec::MessageCodec,
+    primitives::{AppendResponse, VoteRequest, VoteResponse},
+    session::PendingSessionEvent,
 };
 
 #[derive(Debug)]
@@ -78,7 +83,10 @@ pub(crate) enum HandlerEvent {
     AppendResponse(AppendResponse),
     VoteResponse(VoteResponse),
     VoteRequest(VoteRequest),
-    NewSession { stream: Framed<TcpStream, MessageCodec>, addr: SocketAddr },
+    NewSession {
+        stream: Framed<TcpStream, MessageCodec>,
+        addr: SocketAddr,
+    },
 }
 
 #[derive(Debug)]
