@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use futures::{FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +60,9 @@ pub(crate) enum Message {
     AppendResponse(AppendResponse),
     VoteRequeset(VoteRequest),
     VoteResponse(VoteResponse),
+    Hello {
+        local_addr: SocketAddr,
+    }
 }
 
 impl Message {

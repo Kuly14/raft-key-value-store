@@ -24,7 +24,7 @@ use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 use tracing::info;
 
-use super::{session::SessionCommand, state::StateEvent};
+use super::{primitives::{AppendEntries, VoteRequest}, session::SessionCommand, state::StateEvent};
 
 pub struct Swarm {
     config: Config,
@@ -106,12 +106,39 @@ impl Swarm {
     }
 
     pub fn spawn_session(&mut self, stream: TcpStream, addr: SocketAddr) {
+        //TODO: HANDLE THIS UNWRAP
         let id = stream.peer_addr().unwrap().port() as u32 - 8000;
         let (handle, session) =
-        //TODO: HANDLE THIS UNWRAP
             Self::get_handle_and_session(stream, id , &self.handler.sessions_tx);
         tokio::spawn(session);
         self.handler.handles.insert(handle.peer_id, handle);
+    }
+
+    pub(crate) fn handle_vote_request(&mut self, vote_request: VoteRequest)  {
+        let candidate_id = vote_request.candidate_id;
+        let response = self.state.handle_vote_request(vote_request);
+        if let Some(handle) = self.handler.handles.get(&candidate_id) {
+            // TODO: Handle error
+            let _ = handle.command_tx.try_send(SessionCommand::Send(response));
+        } else {
+            unreachable!("Should be unreachable: {:#?}", self.handler.handles.keys())
+        }
+    }
+    pub(crate) fn handle_entry(&mut self, entry: AppendEntries) {
+        self.state.handle_entry(entry);
+    }
+    pub(crate) fn handle_timer_elapsed(&mut self) {
+        self.state.increment_term();
+        let message = self.state.create_vote_request(self.config.id);
+        // TODO: When Receive message reset timer
+
+        // TODO: Handle this
+        let _ = self.handler.send_vote_request(message);
+
+        // No leader we need to start election
+        // Timer elapsed we need to start an election and spawn the future again
+        self.state.reset_timeout();
+        // Have to poll the future, to register it with the waker
     }
 }
 
@@ -142,19 +169,9 @@ impl Stream for Swarm {
             this.state.reset_timeout();
             let _ = this.state.poll(cx);
             match event {
-                HandlerEvent::ReceivedEntries(entries) => this.state.handle_entry(entries),
+                HandlerEvent::ReceivedEntries(entries) => this.handle_entry(entries),
                 HandlerEvent::AppendResponse(append_response) => (),
-
-                HandlerEvent::VoteRequest(vote_request) => {
-                    let candidate_id = vote_request.candidate_id;
-                    let response = this.state.handle_vote_request(vote_request);
-                    if let Some(handle) = this.handler.handles.get(&candidate_id) {
-                        // TODO: Handle error
-                        let _ = handle.command_tx.try_send(SessionCommand::Send(response));
-                    } else {
-                        unreachable!("Should be unreachable: {:#?}", this.handler.handles.keys())
-                    }
-                }
+                HandlerEvent::VoteRequest(vote_request) => this.handle_vote_request(vote_request), 
                 HandlerEvent::VoteResponse(vote_response) => (),
             }
         }
@@ -162,17 +179,7 @@ impl Stream for Swarm {
         if let Poll::Ready(state_event) = this.state.poll(cx) {
             match state_event {
                 StateEvent::TimerElapsed => {
-                    this.state.increment_term();
-                    let message = this.state.create_vote_request(this.config.id);
-                    // TODO: When Receive message reset timer
-
-                    // TODO: Handle this
-                    let _ = this.handler.send_vote_request(message);
-
-                    // No leader we need to start election
-                    // Timer elapsed we need to start an election and spawn the future again
-                    this.state.reset_timeout();
-                    // Have to poll the future, to register it with the waker
+                    this.handle_timer_elapsed();
                     let _ = this.state.poll(cx);
                 }
             }

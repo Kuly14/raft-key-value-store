@@ -55,6 +55,7 @@ impl Stream for Handler {
                 SessionEvent::ReceivedData(Message::AppendResponse(append_response)) => {
                     return Poll::Ready(Some(HandlerEvent::AppendResponse(append_response)));
                 }
+                SessionEvent::ReceivedData(Message::Hello { .. }) => unreachable!(),
             }
         }
 
