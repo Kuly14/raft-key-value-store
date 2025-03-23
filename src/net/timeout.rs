@@ -1,3 +1,4 @@
+use futures::FutureExt;
 use rand::Rng;
 use std::future::Future;
 use std::pin::Pin;
@@ -46,7 +47,7 @@ impl Future for Timeout {
         // Poll the reset channel for heartbeat signals
         match this.reset_rx.poll_recv(cx) {
             Poll::Ready(Some(())) => {
-                this.reset();
+                this.reset(cx);
                 Poll::Pending
             }
             Poll::Ready(None) => Poll::Ready(()),

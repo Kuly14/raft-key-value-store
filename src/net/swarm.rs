@@ -12,6 +12,7 @@ use crate::net::{
 };
 use anyhow::Result;
 use futures::{Stream, StreamExt};
+use tracing_subscriber::layer::Context;
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
@@ -25,8 +26,8 @@ use tokio_util::codec::Framed;
 use tracing::info;
 
 use super::{
-    primitives::{AppendEntries, VoteRequest},
-    session::{SessionCommand, pending_session},
+    primitives::{AppendEntries, Role, VoteRequest, VoteResponse},
+    session::{pending_session, SessionCommand},
     state::StateEvent,
 };
 
@@ -46,7 +47,7 @@ impl Swarm {
         )
         .await?;
 
-        let state = NodeState::new();
+        let state = NodeState::new(&config);
 
         // init the connections
         let (sessions_tx, sessions_rx) = mpsc::channel(100);
@@ -69,6 +70,9 @@ impl Swarm {
         info!("HANDLER: {:?}", swarm.handler);
 
         Ok(swarm)
+    }
+    pub(crate) fn state(&self) -> &NodeState {
+        &self.state
     }
 
     async fn init_connections(&self) -> Result<()> {
@@ -132,6 +136,11 @@ impl Swarm {
             unreachable!("Should be unreachable: {:#?}", self.handler.handles.keys())
         }
     }
+    
+    pub(crate) fn handle_vote_response(&mut self, vote_response: VoteResponse) -> bool {
+        self.state.handle_vote_response(vote_response)
+    } 
+
     pub(crate) fn handle_entry(&mut self, entry: AppendEntries) {
         self.state.handle_entry(entry);
     }
@@ -141,12 +150,17 @@ impl Swarm {
         // TODO: When Receive message reset timer
 
         // TODO: Handle this
+        self.state.vote_for_self(self.config.id);
         let _ = self.handler.send_vote_request(message);
 
         // No leader we need to start election
         // Timer elapsed we need to start an election and spawn the future again
         self.state.reset_timeout();
         // Have to poll the future, to register it with the waker
+    }
+    pub(crate) fn reset_timeout(&mut self, cx: &mut Context<'_>) {
+        self.state.reset_timeout();
+        let _ = self.state.poll(cx);
     }
 }
 
@@ -179,14 +193,22 @@ impl Stream for Swarm {
 
         // Poll Handler
         while let Poll::Ready(Some(event)) = this.handler.poll_next_unpin(cx) {
-            this.state.reset_timeout();
-            let _ = this.state.poll(cx);
             match event {
-                HandlerEvent::ReceivedEntries(entries) => this.handle_entry(entries),
+                HandlerEvent::NewSession { stream, addr } => this.spawn_session(stream, addr),
+                HandlerEvent::ReceivedEntries(entries) => {
+
+                    // TODO: If the entry is invalid don't reset 
+                    if matches!(this.state().role(), Role::Follower) {
+                        this.reset_timeout(cx);
+                    }
+                },
                 HandlerEvent::AppendResponse(append_response) => (),
                 HandlerEvent::VoteRequest(vote_request) => this.handle_vote_request(vote_request),
-                HandlerEvent::VoteResponse(vote_response) => (),
-                HandlerEvent::NewSession { stream, addr } => this.spawn_session(stream, addr),
+                HandlerEvent::VoteResponse(vote_response) => {
+                    if this.handle_vote_response(vote_response) {
+                        this.reset_timeout(cx);
+                    }
+                }
             }
         }
 
