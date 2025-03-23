@@ -31,7 +31,7 @@ pub(crate) struct Handler {
 }
 
 impl Handler {
-    pub(crate) fn send_vote_request(&mut self, message: Message) -> Result<()> {
+    pub(crate) fn send_message_to_all(&mut self, message: Message) -> Result<()> {
         for handle in self.handles.values() {
             let command = SessionCommand::Send(message.clone());
             handle.command_tx.try_send(command)?;
@@ -39,6 +39,7 @@ impl Handler {
         Ok(())
     }
 }
+
 
 impl Stream for Handler {
     type Item = HandlerEvent;

@@ -12,7 +12,6 @@ use crate::net::{
 };
 use anyhow::Result;
 use futures::{Stream, StreamExt};
-use tracing_subscriber::layer::Context;
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
@@ -26,8 +25,8 @@ use tokio_util::codec::Framed;
 use tracing::info;
 
 use super::{
-    primitives::{AppendEntries, Role, VoteRequest, VoteResponse},
-    session::{pending_session, SessionCommand},
+    primitives::{AppendEntries, Role, VoteRequest, VoteResponse, Message},
+    session::{SessionCommand, pending_session},
     state::StateEvent,
 };
 
@@ -136,31 +135,54 @@ impl Swarm {
             unreachable!("Should be unreachable: {:#?}", self.handler.handles.keys())
         }
     }
-    
+
     pub(crate) fn handle_vote_response(&mut self, vote_response: VoteResponse) -> bool {
         self.state.handle_vote_response(vote_response)
-    } 
-
-    pub(crate) fn handle_entry(&mut self, entry: AppendEntries) {
-        self.state.handle_entry(entry);
     }
-    pub(crate) fn handle_timer_elapsed(&mut self) {
+
+    pub(crate) fn handle_entries(&mut self, entries: AppendEntries) -> bool {
+        self.state.handle_entries(entries)
+    }
+
+    pub(crate) fn handle_timer_elapsed_as_leader(&mut self) {
         self.state.increment_term();
+        // TODO: Drain the entries from client and build the AppendEntries struct here
+
+        let entries = AppendEntries {
+            term: self.state.current_term(),
+            entries: Vec::new(),
+            leader_commit: 0,
+            // TODO: Make this dynamic as it should be 
+            leader_id: self.state.id(),
+            prev_log_term: 0,
+            prev_log_index: 0,
+        };
+
+        self.handler.send_message_to_all(Message::AppendEntries(entries));
+        self.state.reset_timeout();
+    }
+
+    /// The [crate::net::timeout::Timeout] future resolved as Poll::Ready, thus we need to spawn a new one
+    pub(crate) fn handle_timer_elapsed_as_follower(&mut self) {
+        self.state.increment_term();
+
         let message = self.state.create_vote_request(self.config.id);
         // TODO: When Receive message reset timer
 
         // TODO: Handle this
         self.state.vote_for_self(self.config.id);
-        let _ = self.handler.send_vote_request(message);
+        let _ = self.handler.send_message_to_all(message);
 
         // No leader we need to start election
         // Timer elapsed we need to start an election and spawn the future again
         self.state.reset_timeout();
         // Have to poll the future, to register it with the waker
     }
-    pub(crate) fn reset_timeout(&mut self, cx: &mut Context<'_>) {
-        self.state.reset_timeout();
-        let _ = self.state.poll(cx);
+
+    /// Sends message over the reset_tx channel to the timeout to reset the timer
+    pub(crate) fn restart_timeout(&mut self) {
+        // TODO: Handle Error
+        let _ = self.state.timeout().reset_tx.try_send(());
     }
 }
 
@@ -196,17 +218,15 @@ impl Stream for Swarm {
             match event {
                 HandlerEvent::NewSession { stream, addr } => this.spawn_session(stream, addr),
                 HandlerEvent::ReceivedEntries(entries) => {
-
-                    // TODO: If the entry is invalid don't reset 
-                    if matches!(this.state().role(), Role::Follower) {
-                        this.reset_timeout(cx);
+                    if this.handle_entries(entries) {
+                        this.restart_timeout();
                     }
-                },
+                }
                 HandlerEvent::AppendResponse(append_response) => (),
                 HandlerEvent::VoteRequest(vote_request) => this.handle_vote_request(vote_request),
                 HandlerEvent::VoteResponse(vote_response) => {
                     if this.handle_vote_response(vote_response) {
-                        this.reset_timeout(cx);
+                        this.restart_timeout();
                     }
                 }
             }
@@ -216,7 +236,12 @@ impl Stream for Swarm {
         if let Poll::Ready(state_event) = this.state.poll(cx) {
             match state_event {
                 StateEvent::TimerElapsed => {
-                    this.handle_timer_elapsed();
+                    match this.state().role() {
+                        Role::Leader => {
+                            this.handle_timer_elapsed_as_leader();
+                        },
+                        Role::Follower | Role::Candidate => this.handle_timer_elapsed_as_follower(),
+                    }
                     let _ = this.state.poll(cx);
                 }
             }

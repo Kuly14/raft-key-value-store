@@ -1,5 +1,5 @@
 use futures::FutureExt;
-
+use tracing::info;
 use crate::{net::{
     primitives::{AppendEntries, LogEntry, Role},
     timeout::Timeout,
@@ -57,10 +57,18 @@ impl NodeState {
         }
     }
 
+    pub(crate) fn current_term(&self) -> u64 {
+        self.current_term
+    }
+
     pub(crate) fn increment_term(&mut self) {
         self.current_term += 1;
         self.vote_count = 0;
         self.voted_for = None;
+    }
+
+    pub(crate) fn timeout(&self) -> &Timeout {
+        &self.timeout
     }
 
     pub(crate) fn last_log_term(&self) -> u64 {
@@ -89,18 +97,19 @@ impl NodeState {
     }
 
     // TODO: Handle the rest of the entry
-    pub(crate) fn handle_entry(&mut self, entry: AppendEntries) {
+    pub(crate) fn handle_entries(&mut self, entries: AppendEntries) -> bool {
         todo!();
         if self.current_leader.is_none() {
-            self.set_new_leader(Some(entry.leader_id));
+            self.set_new_leader(Some(entries.leader_id));
         }
 
-        self.current_term = if self.current_term < entry.term {
-            entry.term
+        self.current_term = if self.current_term < entries.term {
+            entries.term
         } else {
             self.current_term
         };
-        self.log.append(&mut entry.entries);
+        self.log.append(&mut entries.entries);
+        false
     }
 
     // TODO: Unit tests to see if the logic is correct
@@ -164,19 +173,23 @@ impl NodeState {
         if vote_granted {
             self.vote_count += 1;
 
-            // Step 5: Check for majority
             if self.vote_count > self.cluster_size / 2 {
-                self.role = Role::Leader;
-                self.current_leader = Some(self.id());
-                self.vote_count = 0;
-
-                // self.initialize_leader_state(cluster_size);
+                self.initialize_leader_state();
+                return true;
             }
 
             return false;
         }
 
         unreachable!()
+    }
+
+    pub(crate) fn initialize_leader_state(&mut self) {
+        self.role = Role::Leader;
+        self.timeout.is_leader = true;
+        self.current_leader = Some(self.id());
+        self.vote_count = 0;
+        info!("BECOMING LEADER: ID: {}", self.id());
     }
 
     pub(crate) fn id(&self) -> u32 {
@@ -193,10 +206,9 @@ impl NodeState {
     }
 
     pub(crate) fn poll(&mut self, cx: &mut Context<'_>) -> Poll<StateEvent> {
-        // Poll timeout
         if let Poll::Ready(()) = self.timeout.poll_unpin(cx) {
-            return Poll::Ready(StateEvent::TimerElapsed);
             // Timeout expired send an event that we should start election to swarm
+            return Poll::Ready(StateEvent::TimerElapsed);
         }
 
         Poll::Pending
