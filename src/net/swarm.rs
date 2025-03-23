@@ -25,7 +25,7 @@ use tokio_util::codec::Framed;
 use tracing::info;
 
 use super::{
-    primitives::{AppendEntries, Role, VoteRequest, VoteResponse, Message},
+    primitives::{AppendEntries, Message, Role, VoteRequest, VoteResponse},
     session::{SessionCommand, pending_session},
     state::StateEvent,
 };
@@ -152,13 +152,14 @@ impl Swarm {
             term: self.state.current_term(),
             entries: Vec::new(),
             leader_commit: 0,
-            // TODO: Make this dynamic as it should be 
+            // TODO: Make this dynamic as it should be
             leader_id: self.state.id(),
             prev_log_term: 0,
             prev_log_index: 0,
         };
 
-        self.handler.send_message_to_all(Message::AppendEntries(entries));
+        self.handler
+            .send_message_to_all(Message::AppendEntries(entries));
         self.state.reset_timeout();
     }
 
@@ -239,7 +240,7 @@ impl Stream for Swarm {
                     match this.state().role() {
                         Role::Leader => {
                             this.handle_timer_elapsed_as_leader();
-                        },
+                        }
                         Role::Follower | Role::Candidate => this.handle_timer_elapsed_as_follower(),
                     }
                     let _ = this.state.poll(cx);

@@ -1,13 +1,16 @@
+use crate::{
+    Config,
+    net::{
+        primitives::{AppendEntries, LogEntry, Role},
+        timeout::Timeout,
+    },
+};
 use futures::FutureExt;
-use tracing::info;
-use crate::{net::{
-    primitives::{AppendEntries, LogEntry, Role},
-    timeout::Timeout,
-}, Config};
 use std::{
     collections::HashMap,
     task::{Context, Poll},
 };
+use tracing::info;
 
 use super::primitives::{Message, VoteRequest, VoteResponse};
 
@@ -98,18 +101,20 @@ impl NodeState {
 
     // TODO: Handle the rest of the entry
     pub(crate) fn handle_entries(&mut self, entries: AppendEntries) -> bool {
-        todo!();
         if self.current_leader.is_none() {
             self.set_new_leader(Some(entries.leader_id));
+            info!("SET NEW LEADER AS: {}", entries.leader_id);
         }
+        //
+        // self.current_term = if self.current_term < entries.term {
+        //     entries.term
+        // } else {
+        //     self.current_term
+        // };
+        // self.log.append(&mut entries.entries);
+        // false
 
-        self.current_term = if self.current_term < entries.term {
-            entries.term
-        } else {
-            self.current_term
-        };
-        self.log.append(&mut entries.entries);
-        false
+        true
     }
 
     // TODO: Unit tests to see if the logic is correct
@@ -164,7 +169,6 @@ impl NodeState {
             self.vote_count = 0; // Reset since election is invalid
             return true;
         }
-
 
         if term < self.current_term {
             return false;

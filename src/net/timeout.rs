@@ -11,7 +11,7 @@ pub(crate) struct Timeout {
     sleep: Pin<Box<Sleep>>, // Timer for the timeout duration
     pub(crate) is_leader: bool,
     reset_rx: mpsc::Receiver<()>, // Channel to receive reset signals
-    pub(crate) reset_tx: mpsc::Sender<()>,   // Channel to send reset signals (for external use)
+    pub(crate) reset_tx: mpsc::Sender<()>, // Channel to send reset signals (for external use)
 }
 
 impl Timeout {
@@ -25,7 +25,6 @@ impl Timeout {
             reset_tx,
         }
     }
-
 
     pub(crate) fn reset(&mut self) {
         // TODO: Change back to 150..=300

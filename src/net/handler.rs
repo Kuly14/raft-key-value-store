@@ -40,7 +40,6 @@ impl Handler {
     }
 }
 
-
 impl Stream for Handler {
     type Item = HandlerEvent;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
