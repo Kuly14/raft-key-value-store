@@ -100,21 +100,33 @@ impl NodeState {
     }
 
     // TODO: Handle the rest of the entry
-    pub(crate) fn handle_entries(&mut self, entries: AppendEntries) -> bool {
-        if self.current_leader.is_none() {
-            self.set_new_leader(Some(entries.leader_id));
-            info!("SET NEW LEADER AS: {}", entries.leader_id);
-        }
-        //
-        // self.current_term = if self.current_term < entries.term {
-        //     entries.term
-        // } else {
-        //     self.current_term
-        // };
-        // self.log.append(&mut entries.entries);
-        // false
 
-        true
+    pub(crate) fn handle_entries(&mut self, entries: AppendEntries) -> bool {
+        // Reject if the term is lower (stale leader)
+        if entries.term < self.current_term {
+            return false; // Don’t reset timer
+        }
+
+        // If term is higher, update our term and step down if leader
+        if entries.term > self.current_term {
+            self.current_term = entries.term;
+            self.role = Role::Follower; 
+            self.current_leader = Some(entries.leader_id);
+            self.timeout.is_leader = false;
+            return true;
+        }
+
+        // Term is equal: accept if no leader or matching leader
+        if self.current_leader.is_none() {
+            self.current_leader = Some(entries.leader_id);
+            info!("SET NEW LEADER AS: {}", entries.leader_id);
+            return true; // Reset timer, new leader accepted
+        } else if self.current_leader == Some(entries.leader_id) {
+            return true; // Reset timer, existing leader confirmed
+        }
+
+        // If term matches but leader differs, don’t reset timer
+        false
     }
 
     // TODO: Unit tests to see if the logic is correct
@@ -193,7 +205,7 @@ impl NodeState {
         self.timeout.is_leader = true;
         self.current_leader = Some(self.id());
         self.vote_count = 0;
-        info!("BECOMING LEADER: ID: {}", self.id());
+        info!("BECOMING LEADER IN TERM: {}", self.current_term());
     }
 
     pub(crate) fn id(&self) -> u32 {

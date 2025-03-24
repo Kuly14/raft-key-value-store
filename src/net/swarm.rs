@@ -158,13 +158,16 @@ impl Swarm {
             prev_log_index: 0,
         };
 
-        self.handler
+        // TODO: Handle error
+        let _ = self.handler
             .send_message_to_all(Message::AppendEntries(entries));
         self.state.reset_timeout();
     }
 
     /// The [crate::net::timeout::Timeout] future resolved as Poll::Ready, thus we need to spawn a new one
     pub(crate) fn handle_timer_elapsed_as_follower(&mut self) {
+        info!("TIMER ELAPSED STARTING ELECTION: {:#?}", self);
+        info!("{:?}", self.state().role());
         self.state.increment_term();
 
         let message = self.state.create_vote_request(self.config.id);
