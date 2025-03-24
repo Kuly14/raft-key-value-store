@@ -110,7 +110,7 @@ impl NodeState {
         // If term is higher, update our term and step down if leader
         if entries.term > self.current_term {
             self.current_term = entries.term;
-            self.role = Role::Follower; 
+            self.role = Role::Follower;
             self.current_leader = Some(entries.leader_id);
             self.timeout.is_leader = false;
             return true;

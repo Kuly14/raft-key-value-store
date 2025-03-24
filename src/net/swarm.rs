@@ -159,7 +159,8 @@ impl Swarm {
         };
 
         // TODO: Handle error
-        let _ = self.handler
+        let _ = self
+            .handler
             .send_message_to_all(Message::AppendEntries(entries));
         self.state.reset_timeout();
     }
