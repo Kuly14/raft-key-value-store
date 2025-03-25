@@ -37,7 +37,7 @@ impl Future for Session {
         // Poll the stream
         // TODO: Handle errors
         while let Poll::Ready(Some(Ok(msg))) = this.stream.poll_next_unpin(cx) {
-            info!("Received Message From Peer: {:#?}", msg);
+            // info!("Received Message From Peer: {:#?}", msg);
             // TODO: Handle errors
             let _ = this.event_tx.try_send(SessionEvent::ReceivedData(msg));
         }
@@ -85,12 +85,9 @@ pub(crate) async fn pending_session(
     sender: mpsc::Sender<PendingSessionEvent>,
 ) -> Option<()> {
     let mut stream = Framed::new(stream, MessageCodec::new());
-    info!("IN PENDING SESSION");
-
     stream.send(Message::Hello { local_addr }).await.ok()?;
 
-    if let x @ Message::Hello { local_addr } = stream.next().await?.ok()? {
-        info!("RECEIVED IN PENDING SESSION: {:?}", x);
+    if let Message::Hello { local_addr } = stream.next().await?.ok()? {
         sender
             .send(PendingSessionEvent::Established {
                 stream,

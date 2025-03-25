@@ -47,6 +47,7 @@ impl Stream for Handler {
 
         // TODO: Handle errors here
         if let Poll::Ready(Some(event)) = this.sessions_rx.poll_recv(cx) {
+            info!("{:#?}", event);
             match event {
                 SessionEvent::ReceivedData(Message::AppendEntries(entries)) => {
                     return Poll::Ready(Some(HandlerEvent::ReceivedEntries(entries)));

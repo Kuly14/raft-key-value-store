@@ -64,6 +64,10 @@ impl NodeState {
         self.current_term
     }
 
+    pub(crate) fn vote_count(&self) -> u32 {
+        self.vote_count
+    }
+
     pub(crate) fn increment_term(&mut self) {
         self.current_term += 1;
         self.vote_count = 0;
@@ -87,6 +91,7 @@ impl NodeState {
 
     pub(crate) fn vote_for_self(&mut self, id: u32) {
         self.role = Role::Candidate;
+        self.vote_count += 1;
         self.voted_for = Some(id);
     }
 
@@ -189,7 +194,7 @@ impl NodeState {
         if vote_granted {
             self.vote_count += 1;
 
-            if self.vote_count > self.cluster_size / 2 {
+            if self.vote_count > (self.cluster_size / 2) + 1 {
                 self.initialize_leader_state();
                 return true;
             }

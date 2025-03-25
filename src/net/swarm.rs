@@ -66,7 +66,6 @@ impl Swarm {
         };
 
         swarm.init_connections().await?;
-        info!("HANDLER: {:?}", swarm.handler);
 
         Ok(swarm)
     }
@@ -167,8 +166,6 @@ impl Swarm {
 
     /// The [crate::net::timeout::Timeout] future resolved as Poll::Ready, thus we need to spawn a new one
     pub(crate) fn handle_timer_elapsed_as_follower(&mut self) {
-        info!("TIMER ELAPSED STARTING ELECTION: {:#?}", self);
-        info!("{:?}", self.state().role());
         self.state.increment_term();
 
         let message = self.state.create_vote_request(self.config.id);
@@ -177,6 +174,9 @@ impl Swarm {
         // TODO: Handle this
         self.state.vote_for_self(self.config.id);
         let _ = self.handler.send_message_to_all(message);
+
+        info!("{:?}", self.state().role());
+        info!("{:?}", self.state().vote_count());
 
         // No leader we need to start election
         // Timer elapsed we need to start an election and spawn the future again
@@ -220,6 +220,7 @@ impl Stream for Swarm {
 
         // Poll Handler
         while let Poll::Ready(Some(event)) = this.handler.poll_next_unpin(cx) {
+            // TODO: PRINT THE MESSAGES TO SEE IOF THE LEADER IS ALWAYS THE ONE 
             match event {
                 HandlerEvent::NewSession { stream, addr } => this.spawn_session(stream, addr),
                 HandlerEvent::ReceivedEntries(entries) => {
