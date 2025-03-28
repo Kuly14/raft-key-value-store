@@ -202,7 +202,8 @@ impl NodeState {
             return false;
         }
 
-        unreachable!()
+        // The vote wasn't granted and it is in the same term, thus returns false
+        false
     }
 
     pub(crate) fn initialize_leader_state(&mut self) {

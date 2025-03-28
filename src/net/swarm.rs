@@ -175,9 +175,6 @@ impl Swarm {
         self.state.vote_for_self(self.config.id);
         let _ = self.handler.send_message_to_all(message);
 
-        info!("{:?}", self.state().role());
-        info!("{:?}", self.state().vote_count());
-
         // No leader we need to start election
         // Timer elapsed we need to start an election and spawn the future again
         self.state.reset_timeout();
@@ -220,7 +217,6 @@ impl Stream for Swarm {
 
         // Poll Handler
         while let Poll::Ready(Some(event)) = this.handler.poll_next_unpin(cx) {
-            // TODO: PRINT THE MESSAGES TO SEE IOF THE LEADER IS ALWAYS THE ONE 
             match event {
                 HandlerEvent::NewSession { stream, addr } => this.spawn_session(stream, addr),
                 HandlerEvent::ReceivedEntries(entries) => {
@@ -252,7 +248,6 @@ impl Stream for Swarm {
                 }
             }
         }
-
         Poll::Pending
     }
 }
