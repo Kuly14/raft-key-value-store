@@ -17,7 +17,7 @@ pub(crate) struct Timeout {
 impl Timeout {
     pub(crate) fn new() -> Self {
         let (reset_tx, reset_rx) = mpsc::channel(1); // Capacity 1 for latest reset
-        let timeout_ms = rand::rng().random_range(1500..=2500);
+        let timeout_ms = rand::rng().random_range(150..=250);
         Timeout {
             sleep: Box::pin(sleep(Duration::from_millis(timeout_ms as u64))),
             is_leader: false,
@@ -29,9 +29,9 @@ impl Timeout {
     pub(crate) fn reset(&mut self) {
         // TODO: Change back to 150..=300
         let timeout_ms = if self.is_leader {
-            1000
+            100
         } else {
-            rand::rng().random_range(1500..=2500)
+            rand::rng().random_range(150..=250)
         };
         self.sleep = Box::pin(sleep(Duration::from_millis(timeout_ms as u64)));
     }
