@@ -104,3 +104,9 @@ pub(crate) struct AppendResponse {
     term: u64,
     success: bool,
 }
+
+impl AppendResponse {
+    pub(crate) fn new(term: u64, success: bool) -> Self {
+        Self { term, success }
+    }
+}

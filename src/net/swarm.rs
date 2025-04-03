@@ -25,8 +25,8 @@ use tokio_util::codec::Framed;
 use tracing::info;
 
 use super::{
-    primitives::{AppendEntries, Message, Role, VoteRequest, VoteResponse},
-    session::{SessionCommand, pending_session},
+    primitives::{AppendEntries, AppendResponse, Message, Role, VoteRequest, VoteResponse},
+    session::{pending_session, SessionCommand},
     state::StateEvent,
 };
 
@@ -140,7 +140,18 @@ impl Swarm {
     }
 
     pub(crate) fn handle_entries(&mut self, entries: AppendEntries) -> bool {
-        self.state.handle_entries(entries)
+        let leader_id = entries.leader_id;
+        let term = entries.term;
+        // TODO: ACtually check success and not just the reset timer
+        let success = self.state.handle_entries(entries);
+
+
+        if let Some(handle) = self.handler.handles.get(&leader_id) {
+            let msg = Message::AppendResponse(AppendResponse::new(term, success));
+            let _ = handle.command_tx.try_send(SessionCommand::Send(msg));
+        }
+
+        success
     }
 
     pub(crate) fn handle_timer_elapsed_as_leader(&mut self) {
